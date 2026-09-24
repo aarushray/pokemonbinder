@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Binder Designer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="top">
+    <h1>Binder Designer</h1>
+    <p class="sub">Upload a 2:3 design and preview it laser-engraved onto a 9-pocket binder.</p>
+  </header>
+
+  <main class="layout">
+    <section class="controls" aria-label="Design controls">
+      <div class="group">
+        <h2>1. Upload design</h2>
+        <label id="dropzone" class="dropzone" for="fileInput">
+          <input id="fileInput" type="file" accept="image/*" hidden />
+          <span class="dz-main">Drop an image here or <u>browse</u></span>
+          <span class="dz-hint">PNG or JPG, 2:3 ratio (e.g. 1000 × 1500)</span>
+        </label>
+        <div id="fileInfo" class="file-info" hidden></div>
+        <button id="sampleBtn" class="link-btn" type="button">Use sample design (Sylveon)</button>
+      </div>
+
+      <div class="group">
+        <h2>2. Binder colour</h2>
+        <div id="swatches" class="swatches" role="radiogroup" aria-label="Binder colour"></div>
+        <label class="custom-color">
+          <input id="customColor" type="color" value="#e6a9b0" />
+          <span>Custom colour</span>
+          <code id="colorHex">#e6a9b0</code>
+        </label>
+      </div>
+
+      <div class="group">
+        <h2>3. Engraving</h2>
+        <label class="field">
+          <span>Fit</span>
+          <select id="fitMode">
+            <option value="cover">Crop to fill the cover</option>
+            <option value="contain">Fit inside (no cropping)</option>
+            <option value="stretch">Stretch to 2:3</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Depth <output id="depthOut">100%</output></span>
+          <input id="depth" type="range" min="20" max="150" value="100" />
+        </label>
+        <label class="field">
+          <span>Clean-up of light areas <output id="cleanOut">8%</output></span>
+          <input id="clean" type="range" min="0" max="40" value="8" />
+        </label>
+        <label class="check">
+          <input id="invert" type="checkbox" />
+          <span>Invert design (engrave the light areas)</span>
+        </label>
+      </div>
+
+      <button id="downloadBtn" class="primary" type="button" disabled>Download mockup (PNG)</button>
+    </section>
+
+    <section class="preview" aria-label="Preview">
+      <canvas id="canvas"></canvas>
+    </section>
+  </main>
+
+  <script src="sample.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
