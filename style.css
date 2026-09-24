@@ -244,6 +244,11 @@ a { color: inherit; }
 .queue-item > .link { align-self: flex-start; }
 .field-row input { width: 100%; }
 .admin-item .row { display: flex; justify-content: space-between; align-items: center; font-size: 0.88rem; }
+.admin-item canvas { width: 100%; height: auto; background: var(--surface); border-radius: 8px; }
+.admin-item .field { margin: 0; }
+.admin-item .field input, .admin-item .field select { width: 100%; }
+.admin-item .btn { padding: 8px 20px; }
+.admin-item .status { margin: 0; }
 .status { font-size: 0.9rem; margin: 12px 0 0; }
 .status.error { color: #c0392b; }
 

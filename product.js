@@ -42,7 +42,7 @@
 
   // Show the pre-rendered thumbnail instantly, then the full-resolution render once the art loads.
   // (The thumbnail is in the design's default colour, so skip it when another colour was requested.)
-  const thumb = color === design.color ? await Shop.loadImage(design.thumb).catch(() => null) : null;
+  const thumb = color === design.color ? await Shop.loadImage(Shop.thumbUrl(design)).catch(() => null) : null;
   if (thumb) {
     canvas.width = thumb.naturalWidth;
     canvas.height = thumb.naturalHeight;

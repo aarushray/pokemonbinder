@@ -65,6 +65,9 @@ const Shop = (() => {
 
   const money = (n) => `$${Number(n).toFixed(2)}`;
 
+  // Thumbnail URL that changes when the design is edited, so browsers don't show a stale image.
+  const thumbUrl = (d) => (d.updatedAt ? `${d.thumb}?v=${encodeURIComponent(d.updatedAt)}` : d.thumb);
+
   // Colour swatch radio buttons for `colors` ({name, hex} list); calls onPick(hex) when one is chosen.
   function swatches(container, colors, selected, onPick) {
     container.replaceChildren();
@@ -96,5 +99,5 @@ const Shop = (() => {
     if (kept.length !== items.length) writeCart(kept);
   }
 
-  return { readCart, addToCart, setQty, pruneCart, loadDesigns, loadImage, money, swatches, designType };
+  return { readCart, addToCart, setQty, pruneCart, loadDesigns, loadImage, money, thumbUrl, swatches, designType };
 })();

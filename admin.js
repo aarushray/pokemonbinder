@@ -219,31 +219,140 @@
     }
     document.getElementById('count').textContent = `${designs.length} live`;
     empty.hidden = designs.length > 0;
-    list.replaceChildren();
-    for (const d of designs) {
-      const el = document.createElement('div');
-      el.className = 'admin-item';
+    list.replaceChildren(...designs.map(publishedItem));
+  }
+
+  function field(label, input) {
+    const el = document.createElement('label');
+    el.className = 'field';
+    const span = document.createElement('span');
+    span.textContent = label;
+    el.append(span, input);
+    return el;
+  }
+
+  function linkButton(text, onClick) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'link';
+    b.textContent = text;
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  // A published design card that can switch into an edit form.
+  function publishedItem(d) {
+    const el = document.createElement('div');
+    el.className = 'admin-item';
+
+    function showView() {
       const img = document.createElement('img');
-      img.src = d.thumb;
+      img.src = Shop.thumbUrl(d);
       img.alt = '';
       img.loading = 'lazy';
       const title = document.createElement('a');
       title.href = `design.html?id=${encodeURIComponent(d.id)}`;
       title.textContent = d.name;
-      const row = document.createElement('div');
-      row.className = 'row';
       const meta = document.createElement('span');
       meta.className = 'muted';
       meta.textContent = `${Shop.designType(d).name} · ${Binder.colorName(d.color)} · ${d.cards ?? 540} cards · ${Shop.money(d.price)}`;
-      const del = document.createElement('button');
-      del.type = 'button';
-      del.className = 'link';
-      del.textContent = 'Delete';
-      del.addEventListener('click', () => deleteDesign(d));
-      row.append(meta, del);
-      el.append(img, title, row);
-      list.appendChild(el);
+      const actions = document.createElement('div');
+      actions.className = 'row';
+      actions.append(linkButton('Edit', showEdit), linkButton('Delete', () => deleteDesign(d)));
+      el.replaceChildren(img, title, meta, actions);
     }
+
+    function showEdit() {
+      const draft = { name: d.name, type: Shop.designType(d).id, color: d.color, cards: d.cards ?? '', price: d.price };
+      const canvas = document.createElement('canvas');
+      let art = null;
+      const draw = () => {
+        if (art) Binder.render(canvas, { image: art, color: draft.color, type: draft.type, scale: 0.25 });
+      };
+      Shop.loadImage(d.art).then((img) => { art = img; draw(); }).catch(() => {});
+
+      const name = document.createElement('input');
+      name.value = draft.name;
+      name.maxLength = 80;
+      name.addEventListener('input', () => { draft.name = name.value; });
+
+      const typeSelect = document.createElement('select');
+      for (const t of Binder.TYPES) typeSelect.add(new Option(`${t.name} (${t.ratio[0]}:${t.ratio[1]} art)`, t.id, false, t.id === draft.type));
+
+      const colorSelect = document.createElement('select');
+      const fillColors = () => {
+        const colors = Binder.typeColors(draft.type);
+        if (!colors.some((c) => c.hex === draft.color)) draft.color = colors[0].hex;
+        colorSelect.replaceChildren(...colors.map((c) => new Option(c.name, c.hex, false, c.hex === draft.color)));
+      };
+      fillColors();
+      typeSelect.addEventListener('change', () => { draft.type = typeSelect.value; fillColors(); draw(); });
+      colorSelect.addEventListener('change', () => { draft.color = colorSelect.value; draw(); });
+
+      const cards = document.createElement('input');
+      cards.type = 'number';
+      cards.min = '1';
+      cards.max = '10000';
+      cards.step = '1';
+      cards.value = draft.cards;
+      cards.addEventListener('input', () => { draft.cards = cards.value; });
+
+      const price = document.createElement('input');
+      price.type = 'number';
+      price.min = '1';
+      price.step = '0.01';
+      price.value = draft.price;
+      price.addEventListener('input', () => { draft.price = price.value; });
+
+      const sizeRow = document.createElement('div');
+      sizeRow.className = 'field-row';
+      sizeRow.append(field('Cards held', cards), field('Price', price));
+
+      const error = document.createElement('p');
+      error.className = 'status error';
+      error.hidden = true;
+
+      const save = document.createElement('button');
+      save.type = 'button';
+      save.className = 'btn';
+      save.textContent = 'Save';
+      save.addEventListener('click', async () => {
+        error.hidden = true;
+        save.disabled = true;
+        const body = { name: draft.name.trim(), type: draft.type, color: draft.color, cards: Number(draft.cards), price: Number(draft.price) };
+        // The shop thumbnail shows the type and colour, so redraw it when either changed.
+        if ((draft.type !== Shop.designType(d).id || draft.color !== d.color) && art) {
+          const thumb = document.createElement('canvas');
+          Binder.render(thumb, { image: art, color: draft.color, type: draft.type, scale: 0.5 });
+          body.thumb = thumb.toDataURL('image/webp', 0.85);
+        }
+        const res = await fetch(`/api/designs/${encodeURIComponent(d.id)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-Admin-Key': keyInput.value },
+          body: JSON.stringify(body),
+        }).catch(() => null);
+        save.disabled = false;
+        if (!res || !res.ok) {
+          const msg = res ? (await res.json().catch(() => ({}))).error : 'Could not reach the server.';
+          if (res && res.status === 403) keyField.hidden = false;
+          error.textContent = res && res.status === 403 ? 'Not allowed. Enter the admin password above.' : msg || 'Save failed.';
+          error.hidden = false;
+          return;
+        }
+        Object.assign(d, await res.json());
+        showView();
+      });
+
+      const actions = document.createElement('div');
+      actions.className = 'row';
+      actions.append(save, linkButton('Cancel', showView));
+
+      el.replaceChildren(canvas, field('Name', name), field('Binder type', typeSelect),
+        field('Binder colour', colorSelect), sizeRow, error, actions);
+    }
+
+    showView();
+    return el;
   }
 
   const fileInput = document.getElementById('fileInput');

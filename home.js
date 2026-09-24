@@ -32,7 +32,7 @@
     const media = document.createElement('div');
     media.className = 'card-media';
     const img = document.createElement('img');
-    img.src = d.thumb;
+    img.src = Shop.thumbUrl(d);
     img.alt = `${d.name} binder`;
     img.loading = 'lazy';
     const canvas = document.createElement('canvas');

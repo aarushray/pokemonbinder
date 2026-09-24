@@ -86,26 +86,29 @@ function slug(s) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'design';
 }
 
-async function createDesign(req, res) {
-  const body = JSON.parse(await readBody(req));
+// Validates the editable fields of a design; returns { error } or { fields }.
+function validateFields(body) {
   const name = String(body.name || '').trim().slice(0, 80);
   const price = Math.round(Number(body.price) * 100) / 100;
-  if (!name) return sendJson(res, 400, { error: 'Name is required' });
-  if (!(price > 0 && price < 10000)) return sendJson(res, 400, { error: 'Price must be between 0 and 10000' });
+  if (!name) return { error: 'Name is required' };
+  if (!(price > 0 && price < 10000)) return { error: 'Price must be between 0 and 10000' };
   const type = BINDER_TYPES.find((t) => t.id === body.type);
-  if (!type) return sendJson(res, 400, { error: 'Unknown binder type' });
-  if (!type.colors.includes(body.color)) return sendJson(res, 400, { error: `That colour isn't available for the ${type.name}` });
+  if (!type) return { error: 'Unknown binder type' };
+  if (!type.colors.includes(body.color)) return { error: `That colour isn't available for the ${type.name}` };
   const cards = Number(body.cards);
-  if (!Number.isInteger(cards) || cards < 1 || cards > 10000) return sendJson(res, 400, { error: 'Card capacity must be a whole number from 1 to 10000' });
+  if (!Number.isInteger(cards) || cards < 1 || cards > 10000) return { error: 'Card capacity must be a whole number from 1 to 10000' };
+  return { fields: { name, price, color: body.color, type: type.id, cards } };
+}
 
-  const id = `${slug(name)}-${crypto.randomBytes(3).toString('hex')}`;
+async function createDesign(req, res) {
+  const body = JSON.parse(await readBody(req));
+  const { error, fields } = validateFields(body);
+  if (error) return sendJson(res, 400, { error });
+
+  const id = `${slug(fields.name)}-${crypto.randomBytes(3).toString('hex')}`;
   const design = {
     id,
-    name,
-    price,
-    color: body.color,
-    type: type.id,
-    cards,
+    ...fields,
     art: saveDataUrl(body.art, `${id}-art`),
     thumb: saveDataUrl(body.thumb, `${id}-thumb`),
     createdAt: new Date().toISOString(),
@@ -114,6 +117,28 @@ async function createDesign(req, res) {
   db.designs.unshift(design);
   writeDb(db);
   sendJson(res, 201, design);
+}
+
+// Updates a design's details. A new thumbnail is optional (sent when the type or colour changed).
+async function updateDesign(id, req, res) {
+  const body = JSON.parse(await readBody(req));
+  const db = readDb();
+  const design = db.designs.find((d) => d.id === id);
+  if (!design) return sendJson(res, 404, { error: 'Design not found' });
+  const { error, fields } = validateFields(body);
+  if (error) return sendJson(res, 400, { error });
+
+  if (body.thumb) {
+    const thumb = saveDataUrl(body.thumb, `${id}-thumb`);
+    if (thumb !== design.thumb) {
+      const old = path.join(ROOT, design.thumb);
+      if (path.dirname(old) === DESIGNS_DIR) fs.rmSync(old, { force: true });
+    }
+    design.thumb = thumb;
+  }
+  Object.assign(design, fields, { updatedAt: new Date().toISOString() });
+  writeDb(db);
+  sendJson(res, 200, design);
 }
 
 function deleteDesign(id, res) {
@@ -166,10 +191,14 @@ http.createServer(async (req, res) => {
       if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
       return await createDesign(req, res);
     }
-    const del = /^\/api\/designs\/([a-z0-9-]+)$/.exec(pathname);
-    if (del && req.method === 'DELETE') {
+    const one = /^\/api\/designs\/([a-z0-9-]+)$/.exec(pathname);
+    if (one && req.method === 'DELETE') {
       if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
-      return deleteDesign(del[1], res);
+      return deleteDesign(one[1], res);
+    }
+    if (one && req.method === 'PATCH') {
+      if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
+      return await updateDesign(one[1], req, res);
     }
     if (pathname.startsWith('/api/')) return sendJson(res, 404, { error: 'Not found' });
     if (req.method !== 'GET' && req.method !== 'HEAD') return res.writeHead(405).end();
