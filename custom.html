@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Custom Designs · PokeEngrave</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="index.html">PokeEngrave</a>
+      <nav class="nav">
+        <a href="index.html">Shop</a>
+        <a href="custom.html" aria-current="page">Custom Designs</a>
+        <a href="cart.html">Cart (<span data-cart-count>0</span>)</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="intro">
+      <h1>Custom Designs</h1>
+      <p>Pick a binder, upload your design and preview it laser-engraved.</p>
+    </div>
+
+    <div class="designer">
+      <section class="panel" aria-label="Design controls">
+        <div class="group">
+          <h2>Binder</h2>
+          <div id="types" class="type-options" role="radiogroup" aria-label="Binder type"></div>
+        </div>
+
+        <div class="group">
+          <h2>Design</h2>
+          <label id="dropzone" class="dropzone" for="fileInput">
+            <input id="fileInput" type="file" accept="image/*" hidden />
+            <span class="dz-main">Drop an image here or <u>browse</u></span>
+            <span id="ratioHint" class="dz-hint"></span>
+          </label>
+          <div id="fileInfo" class="file-info" hidden></div>
+          <p class="note"><button id="sampleBtn" class="link" type="button">Use sample design (Sylveon)</button></p>
+        </div>
+
+        <div class="group">
+          <h2>Binder colour</h2>
+          <div id="swatches" class="swatches" role="radiogroup" aria-label="Binder colour"></div>
+          <p id="colorName" class="note"></p>
+        </div>
+
+        <div class="group">
+          <h2>Engraving</h2>
+          <label class="field">
+            <span>Fit</span>
+            <select id="fitMode">
+              <option value="cover">Crop to fill the cover</option>
+              <option value="contain">Fit inside (no cropping)</option>
+              <option id="stretchOption" value="stretch">Stretch to fit</option>
+            </select>
+          </label>
+          <label class="check">
+            <input id="invert" type="checkbox" />
+            <span>Invert design (engrave the light areas)</span>
+          </label>
+        </div>
+
+        <div class="group">
+          <button id="downloadBtn" class="btn btn-block" type="button" disabled>Download mockup (PNG)</button>
+        </div>
+      </section>
+
+      <section class="stage" aria-label="Preview">
+        <canvas id="canvas"></canvas>
+      </section>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">© PokeEngrave</div>
+  </footer>
+
+  <script src="sample.js"></script>
+  <script src="catalog.js"></script>
+  <script src="binder.js"></script>
+  <script src="common.js"></script>
+  <script src="custom.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+{
+  "designs": [
+    {
+      "id": "lucario-abeaee",
+      "name": "Lucario",
+      "price": 80,
+      "color": "#445479",
+      "cards": 360,
+      "art": "designs/lucario-abeaee-art.jpg",
+      "thumb": "designs/lucario-abeaee-thumb.webp",
+      "createdAt": "2026-09-24T12:26:44.545Z",
+      "type": "9-pocket"
+    },
+    {
+      "id": "sylveon-garden-8d5fa4",
+      "name": "Sylveon Garden",
+      "price": 64.99,
+      "color": "#e87a79",
+      "cards": 540,
+      "art": "designs/sylveon-garden-8d5fa4-art.jpg",
+      "thumb": "designs/sylveon-garden-8d5fa4-thumb.webp",
+      "createdAt": "2026-09-24T11:59:51.554Z",
+      "type": "9-pocket"
+    }
+  ]
+}

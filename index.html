@@ -3,71 +3,51 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Binder Designer</title>
+  <title>PokeEngrave</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header class="top">
-    <h1>Binder Designer</h1>
-    <p class="sub">Upload a 2:3 design and preview it laser-engraved onto a 9-pocket binder.</p>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="index.html">PokeEngrave</a>
+      <nav class="nav">
+        <a href="index.html" aria-current="page">Shop</a>
+        <a href="custom.html">Custom Designs</a>
+        <a href="cart.html">Cart (<span data-cart-count>0</span>)</a>
+      </nav>
+    </div>
   </header>
 
-  <main class="layout">
-    <section class="controls" aria-label="Design controls">
-      <div class="group">
-        <h2>1. Upload design</h2>
-        <label id="dropzone" class="dropzone" for="fileInput">
-          <input id="fileInput" type="file" accept="image/*" hidden />
-          <span class="dz-main">Drop an image here or <u>browse</u></span>
-          <span class="dz-hint">PNG or JPG, 2:3 ratio (e.g. 1000 × 1500)</span>
-        </label>
-        <div id="fileInfo" class="file-info" hidden></div>
-        <button id="sampleBtn" class="link-btn" type="button">Use sample design (Sylveon)</button>
-      </div>
-
-      <div class="group">
-        <h2>2. Binder colour</h2>
-        <div id="swatches" class="swatches" role="radiogroup" aria-label="Binder colour"></div>
-        <label class="custom-color">
-          <input id="customColor" type="color" value="#e6a9b0" />
-          <span>Custom colour</span>
-          <code id="colorHex">#e6a9b0</code>
-        </label>
-      </div>
-
-      <div class="group">
-        <h2>3. Engraving</h2>
-        <label class="field">
-          <span>Fit</span>
-          <select id="fitMode">
-            <option value="cover">Crop to fill the cover</option>
-            <option value="contain">Fit inside (no cropping)</option>
-            <option value="stretch">Stretch to 2:3</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Depth <output id="depthOut">100%</output></span>
-          <input id="depth" type="range" min="20" max="150" value="100" />
-        </label>
-        <label class="field">
-          <span>Clean-up of light areas <output id="cleanOut">8%</output></span>
-          <input id="clean" type="range" min="0" max="40" value="8" />
-        </label>
-        <label class="check">
-          <input id="invert" type="checkbox" />
-          <span>Invert design (engrave the light areas)</span>
-        </label>
-      </div>
-
-      <button id="downloadBtn" class="primary" type="button" disabled>Download mockup (PNG)</button>
+  <main class="container">
+    <section class="hero">
+      <h1>Engraved binders</h1>
+      <p>Laser-engraved card binders, made to order. Pick a design or create your own.</p>
+      <a class="btn" href="custom.html">Create a custom design</a>
     </section>
 
-    <section class="preview" aria-label="Preview">
-      <canvas id="canvas"></canvas>
+    <section aria-labelledby="designs-heading">
+      <div class="section-head">
+        <h2 id="designs-heading">Designs</h2>
+        <span id="count" class="muted"></span>
+      </div>
+      <div id="grid" class="grid"></div>
+      <p id="empty" class="empty" hidden>No designs yet.</p>
+    </section>
+
+    <section class="cta-band">
+      <h2>Have your own artwork?</h2>
+      <p>Upload your artwork and see it engraved on the binder of your choice.</p>
+      <a class="btn" href="custom.html">Go to Custom Designs</a>
     </section>
   </main>
 
-  <script src="sample.js"></script>
-  <script src="app.js"></script>
+  <footer class="site-footer">
+    <div class="container">© PokeEngrave</div>
+  </footer>
+
+  <script src="catalog.js"></script>
+  <script src="binder.js"></script>
+  <script src="common.js"></script>
+  <script src="home.js"></script>
 </body>
 </html>

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Design · PokeEngrave</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="index.html">PokeEngrave</a>
+      <nav class="nav">
+        <a href="index.html">Shop</a>
+        <a href="custom.html">Custom Designs</a>
+        <a href="cart.html">Cart (<span data-cart-count>0</span>)</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <a class="back" href="index.html">← All designs</a>
+
+    <p id="missing" class="empty" hidden>This design couldn't be found. <a href="index.html">Back to all designs</a></p>
+
+    <div id="product" class="product" hidden>
+      <div class="stage">
+        <canvas id="canvas" aria-label="Binder preview"></canvas>
+      </div>
+
+      <div class="product-info">
+        <h1 id="name"></h1>
+        <p id="typeName" class="label"></p>
+        <p id="price" class="price"></p>
+
+        <p class="label">Binder colour: <strong id="colorName"></strong></p>
+        <div id="swatches" class="swatches" role="radiogroup" aria-label="Binder colour"></div>
+
+        <div class="buy-row">
+          <div class="qty" aria-label="Quantity">
+            <button id="minus" type="button" aria-label="Decrease quantity">−</button>
+            <span id="qty">1</span>
+            <button id="plus" type="button" aria-label="Increase quantity">+</button>
+          </div>
+          <button id="addBtn" class="btn" type="button">Add to cart</button>
+        </div>
+        <p id="added" class="note" hidden>Added to cart. <a href="cart.html">View cart</a></p>
+
+        <div class="details">
+          <ul>
+            <li id="pockets"></li>
+            <li id="cards"></li>
+            <li>Laser engraved to order in small batches</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">© PokeEngrave</div>
+  </footer>
+
+  <script src="catalog.js"></script>
+  <script src="binder.js"></script>
+  <script src="common.js"></script>
+  <script src="product.js"></script>
+</body>
+</html>

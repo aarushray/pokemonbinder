@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cart · PokeEngrave</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="index.html">PokeEngrave</a>
+      <nav class="nav">
+        <a href="index.html">Shop</a>
+        <a href="custom.html">Custom Designs</a>
+        <a href="cart.html" aria-current="page">Cart (<span data-cart-count>0</span>)</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <h1 class="page-title">Cart</h1>
+
+    <p id="empty" class="empty" hidden>Your cart is empty. <a href="index.html">Browse designs</a></p>
+
+    <div id="cart" class="cart" hidden>
+      <div id="lines" class="cart-lines"></div>
+      <aside class="summary">
+        <div class="summary-row"><span>Items</span><span id="items"></span></div>
+        <div class="summary-row"><span>Shipping</span><span class="muted">Calculated at checkout</span></div>
+        <div class="summary-row total"><span>Subtotal</span><span id="subtotal"></span></div>
+        <button id="checkout" class="btn btn-block" type="button">Checkout</button>
+        <p id="checkoutNote" class="note" hidden>Online checkout isn't connected yet.</p>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">© PokeEngrave</div>
+  </footer>
+
+  <script src="catalog.js"></script>
+  <script src="binder.js"></script>
+  <script src="common.js"></script>
+  <script src="cart.js"></script>
+</body>
+</html>

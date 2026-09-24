@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Manage Designs · PokeEngrave</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="index.html">PokeEngrave</a>
+      <nav class="nav">
+        <a href="index.html">Shop</a>
+        <a href="admin.html" aria-current="page">Manage designs</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="intro">
+      <h1>Manage designs</h1>
+      <p>Upload artwork, choose each binder's type, colour and price, then publish it to the shop.</p>
+    </div>
+
+    <section class="panel">
+      <div class="group">
+        <h2>Upload</h2>
+        <label id="dropzone" class="dropzone" for="fileInput">
+          <input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden />
+          <span class="dz-main">Drop design images here or <u>browse</u></span>
+          <span class="dz-hint">You can add several at once. PNG, JPG or WebP in the binder type's aspect ratio.</span>
+        </label>
+      </div>
+
+      <div id="queueGroup" class="group" hidden>
+        <h2>Ready to publish</h2>
+        <div id="queue" class="admin-grid"></div>
+        <div style="display:flex; gap:16px; align-items:end; flex-wrap:wrap; margin-top:20px">
+          <label class="field" style="margin:0">
+            <span>Price (all)</span>
+            <input id="price" type="number" min="1" step="0.01" value="64.99" style="width:140px" />
+          </label>
+          <label class="field" id="keyField" style="margin:0" hidden>
+            <span>Admin password</span>
+            <input id="adminKey" type="password" autocomplete="current-password" />
+          </label>
+          <button id="publishBtn" class="btn" type="button">Publish</button>
+        </div>
+        <p id="status" class="status" hidden></p>
+      </div>
+    </section>
+
+    <section style="margin-top:48px">
+      <div class="section-head">
+        <h2>Published</h2>
+        <span id="count" class="muted"></span>
+      </div>
+      <div id="published" class="admin-grid"></div>
+      <p id="empty" class="empty" hidden>Nothing published yet.</p>
+    </section>
+  </main>
+
+  <script src="catalog.js"></script>
+  <script src="binder.js"></script>
+  <script src="common.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>
