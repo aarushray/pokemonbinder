@@ -1,30 +1,104 @@
 {
   "designs": [
     {
+      "id": "dragon-ball-collector-9e7fcb",
+      "name": "Dragon ball collector",
+      "price": 64.99,
+      "color": "#e87a79",
+      "type": "9-pocket",
+      "cards": 360,
+      "art": "designs/dragon-ball-collector-9e7fcb-art.jpg",
+      "thumb": "designs/dragon-ball-collector-9e7fcb-thumb.webp",
+      "createdAt": "2026-09-25T00:20:27.026Z",
+      "updatedAt": "2026-09-25T00:20:47.930Z",
+      "page": "dragon-ball",
+      "subclasses": []
+    },
+    {
+      "id": "luffy-b3309f",
+      "name": "Luffy",
+      "price": 90,
+      "color": "#74716c",
+      "type": "9-pocket",
+      "cards": 540,
+      "art": "designs/luffy-b3309f-art.jpg",
+      "thumb": "designs/luffy-b3309f-thumb.webp",
+      "createdAt": "2026-09-24T23:59:00.842Z",
+      "page": "one-piece",
+      "subclasses": [
+        "Luffy"
+      ],
+      "updatedAt": "2026-09-25T00:33:33.740Z"
+    },
+    {
+      "id": "charizard-pikachu-0af22a",
+      "name": "Charizard pikachu",
+      "price": 70,
+      "color": "#b82e40",
+      "type": "9-pocket",
+      "cards": 360,
+      "art": "designs/charizard-pikachu-0af22a-art.jpg",
+      "thumb": "designs/charizard-pikachu-0af22a-thumb.webp",
+      "createdAt": "2026-09-24T15:13:08.692Z",
+      "page": "pokemon",
+      "subclasses": [
+        "Pikachu",
+        "Charizard"
+      ],
+      "updatedAt": "2026-09-25T00:30:34.901Z"
+    },
+    {
+      "id": "greninja-30th-anniversary-e53a94",
+      "name": "Greninja 30th Anniversary",
+      "price": 80,
+      "color": "#eeeeec",
+      "type": "9-pocket",
+      "cards": 360,
+      "art": "designs/greninja-30th-anniversary-e53a94-art.jpg",
+      "thumb": "designs/greninja-30th-anniversary-e53a94-thumb.webp",
+      "createdAt": "2026-09-24T14:17:19.192Z",
+      "page": "pokemon",
+      "subclasses": [
+        "30th Anniversary"
+      ],
+      "updatedAt": "2026-09-25T00:30:29.734Z"
+    },
+    {
       "id": "sylveon-image-867699",
-      "name": "Sylveon image",
+      "name": "Sylveon 30th Anniversary",
       "price": 85,
       "color": "#e87a79",
       "type": "9-pocket",
       "cards": 360,
       "art": "designs/sylveon-image-867699-art.jpg",
       "thumb": "designs/sylveon-image-867699-thumb.webp",
-      "createdAt": "2026-09-24T13:43:53.899Z"
+      "createdAt": "2026-09-24T13:43:53.899Z",
+      "updatedAt": "2026-09-25T00:32:15.766Z",
+      "page": "pokemon",
+      "subclasses": [
+        "30th Anniversary",
+        "Sylveon"
+      ]
     },
     {
       "id": "mew-e20fef",
-      "name": "Mew",
+      "name": "Mew 30th Anniversary",
       "price": 75,
       "color": "#e87a79",
       "type": "9-pocket",
       "cards": 360,
       "art": "designs/mew-e20fef-art.jpg",
       "thumb": "designs/mew-e20fef-thumb.webp",
-      "createdAt": "2026-09-24T13:43:27.683Z"
+      "createdAt": "2026-09-24T13:43:27.683Z",
+      "updatedAt": "2026-09-25T00:30:33.183Z",
+      "page": "pokemon",
+      "subclasses": [
+        "30th Anniversary"
+      ]
     },
     {
       "id": "lucario-abeaee",
-      "name": "Lucario",
+      "name": "Lucario Aura",
       "price": 80,
       "color": "#445479",
       "cards": 360,
@@ -32,7 +106,39 @@
       "thumb": "designs/lucario-abeaee-thumb.webp",
       "createdAt": "2026-09-24T12:26:44.545Z",
       "type": "9-pocket",
-      "updatedAt": "2026-09-24T13:41:55.737Z"
+      "updatedAt": "2026-09-25T00:30:36.605Z",
+      "page": "pokemon",
+      "subclasses": [
+        "Lucario"
+      ]
+    }
+  ],
+  "collections": [
+    {
+      "id": "pokemon",
+      "name": "Pokémon",
+      "subclasses": [
+        "30th Anniversary",
+        "Pikachu",
+        "Charizard",
+        "Lucario",
+        "Gengar",
+        "Sylveon"
+      ]
+    },
+    {
+      "id": "one-piece",
+      "name": "One Piece",
+      "subclasses": [
+        "Luffy",
+        "Zoro",
+        "Ace"
+      ]
+    },
+    {
+      "id": "dragon-ball",
+      "name": "Dragon Ball",
+      "subclasses": []
     }
   ]
 }

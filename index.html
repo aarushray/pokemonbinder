@@ -1,17 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>PokeEngrave</title>
   <link rel="stylesheet" href="style.css" />
 </head>
-<body>
+
+<body data-page="home">
   <header class="site-header">
     <div class="container">
       <a class="logo" href="index.html">PokeEngrave</a>
       <nav class="nav">
-        <a href="index.html" aria-current="page">Shop</a>
+        <a href="index.html" aria-current="page">Home</a>
         <a href="custom.html">Custom Designs</a>
         <a href="cart.html">Cart (<span data-cart-count>0</span>)</a>
       </nav>
@@ -30,6 +32,7 @@
         <h2 id="designs-heading">Designs</h2>
         <span id="count" class="muted"></span>
       </div>
+      <div id="tagFilters" class="tag-filters" role="group" aria-label="Filter by tag" hidden></div>
       <div id="grid" class="grid"></div>
       <p id="empty" class="empty" hidden>No designs yet.</p>
     </section>
@@ -50,4 +53,5 @@
   <script src="common.js"></script>
   <script src="home.js"></script>
 </body>
+
 </html>

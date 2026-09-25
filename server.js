@@ -1,6 +1,10 @@
 // Serves the site and the designer upload API. No dependencies: run with `node server.js`.
 //
-// Admin actions (upload/delete designs) are allowed from this computer only, unless
+// Data lives in designs/designs.json: { designs: [...], collections: [{ id, name, subclasses }] }.
+// Collections are the shop's pages. Each design belongs to one page (`page`, a collection id) and
+// may be tagged with some of that page's subclasses (`subclasses`), which the shop uses as filters.
+//
+// Admin actions (upload/edit/delete designs, add/remove pages) are allowed from this computer only, unless
 // ADMIN_PASSWORD is set, in which case requests must send it in the X-Admin-Key header.
 const http = require('http');
 const fs = require('fs');
@@ -29,12 +33,49 @@ const TYPES = {
   '.ico': 'image/x-icon',
 };
 
+const DEFAULT_COLLECTIONS = [
+  { id: 'pokemon', name: 'Pokémon' },
+  { id: 'one-piece', name: 'One Piece' },
+];
+
 function readDb() {
+  let db;
   try {
-    return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+    db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
   } catch {
-    return { designs: [] };
+    db = { designs: [] };
   }
+  if (!Array.isArray(db.collections)) db.collections = DEFAULT_COLLECTIONS.map((c) => ({ ...c }));
+  for (const c of db.collections) if (!Array.isArray(c.subclasses)) c.subclasses = [];
+  return db;
+}
+
+// Names compare ignoring case, accents and extra spaces ("pokemon" = "Pokémon").
+function normTag(s) {
+  return String(s).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+// Older designs had a `genre`, then free-text `tags`; turn them into a page plus subclasses.
+function migrate() {
+  const db = readDb();
+  const legacy = { pokemon: 'Pokémon', 'one-piece': 'One Piece' };
+  for (const d of db.designs) {
+    if (!Array.isArray(d.tags) && !d.page) d.tags = [legacy[d.genre] || 'Pokémon'];
+    if (Array.isArray(d.tags)) {
+      const page = db.collections.find((c) => d.tags.some((t) => normTag(t) === normTag(c.name)));
+      d.page = page ? page.id : null;
+      d.subclasses = page ? d.tags.filter((t) => normTag(t) !== normTag(page.name)) : [];
+      if (page) {
+        for (const x of d.subclasses) {
+          if (!page.subclasses.some((y) => normTag(y) === normTag(x))) page.subclasses.push(x);
+        }
+      }
+    }
+    if (!Array.isArray(d.subclasses)) d.subclasses = [];
+    delete d.tags;
+    delete d.genre;
+  }
+  writeDb(db);
 }
 
 function writeDb(db) {
@@ -87,7 +128,7 @@ function slug(s) {
 }
 
 // Validates the editable fields of a design; returns { error } or { fields }.
-function validateFields(body) {
+function validateFields(body, db) {
   const name = String(body.name || '').trim().slice(0, 80);
   const price = Math.round(Number(body.price) * 100) / 100;
   if (!name) return { error: 'Name is required' };
@@ -97,12 +138,33 @@ function validateFields(body) {
   if (!type.colors.includes(body.color)) return { error: `That colour isn't available for the ${type.name}` };
   const cards = Number(body.cards);
   if (!Number.isInteger(cards) || cards < 1 || cards > 10000) return { error: 'Card capacity must be a whole number from 1 to 10000' };
-  return { fields: { name, price, color: body.color, type: type.id, cards } };
+  const page = db.collections.find((c) => c.id === body.page);
+  if (!page) return { error: 'Choose which page the design goes on' };
+  // Keep only subclasses that exist on that page, spelled as the page spells them.
+  const wanted = new Set(cleanNames(body.subclasses).map(normTag));
+  const subclasses = page.subclasses.filter((s) => wanted.has(normTag(s)));
+  return { fields: { name, price, color: body.color, type: type.id, cards, page: page.id, subclasses } };
+}
+
+// A list (or comma-separated string) of short labels, trimmed, without duplicates.
+function cleanNames(input) {
+  const list = Array.isArray(input) ? input : String(input || '').split(',');
+  const seen = new Set();
+  const tags = [];
+  for (const raw of list) {
+    const tag = String(raw).replace(/\s+/g, ' ').trim().slice(0, 40);
+    if (tag && !seen.has(normTag(tag))) {
+      seen.add(normTag(tag));
+      tags.push(tag);
+    }
+  }
+  return tags.slice(0, 20);
 }
 
 async function createDesign(req, res) {
   const body = JSON.parse(await readBody(req));
-  const { error, fields } = validateFields(body);
+  const db = readDb();
+  const { error, fields } = validateFields(body, db);
   if (error) return sendJson(res, 400, { error });
 
   const id = `${slug(fields.name)}-${crypto.randomBytes(3).toString('hex')}`;
@@ -113,7 +175,6 @@ async function createDesign(req, res) {
     thumb: saveDataUrl(body.thumb, `${id}-thumb`),
     createdAt: new Date().toISOString(),
   };
-  const db = readDb();
   db.designs.unshift(design);
   writeDb(db);
   sendJson(res, 201, design);
@@ -125,7 +186,7 @@ async function updateDesign(id, req, res) {
   const db = readDb();
   const design = db.designs.find((d) => d.id === id);
   if (!design) return sendJson(res, 404, { error: 'Design not found' });
-  const { error, fields } = validateFields(body);
+  const { error, fields } = validateFields(body, db);
   if (error) return sendJson(res, 400, { error });
 
   if (body.thumb) {
@@ -137,8 +198,52 @@ async function updateDesign(id, req, res) {
     design.thumb = thumb;
   }
   Object.assign(design, fields, { updatedAt: new Date().toISOString() });
+  delete design.genre;
+  delete design.tags;
   writeDb(db);
   sendJson(res, 200, design);
+}
+
+async function createCollection(req, res) {
+  const body = JSON.parse(await readBody(req));
+  const name = String(body.name || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  if (!name) return sendJson(res, 400, { error: 'Page name is required' });
+  const db = readDb();
+  if (db.collections.some((c) => normTag(c.name) === normTag(name))) {
+    return sendJson(res, 400, { error: `There is already a "${name}" page` });
+  }
+  const base = slug(normTag(name));
+  let id = base;
+  for (let n = 2; db.collections.some((c) => c.id === id); n++) id = `${base}-${n}`;
+  const collection = { id, name, subclasses: [] };
+  db.collections.push(collection);
+  writeDb(db);
+  sendJson(res, 201, collection);
+}
+
+// Replaces a page's subclass list (the admin adds/removes them one at a time). Designs keep only
+// the subclasses that still exist on their page.
+async function updateCollection(id, req, res) {
+  const body = JSON.parse(await readBody(req));
+  const db = readDb();
+  const page = db.collections.find((c) => c.id === id);
+  if (!page) return sendJson(res, 404, { error: 'Page not found' });
+  page.subclasses = cleanNames(body.subclasses).slice(0, 50);
+  const keep = new Set(page.subclasses.map(normTag));
+  for (const d of db.designs) {
+    if (d.page === id) d.subclasses = (d.subclasses || []).filter((x) => keep.has(normTag(x)));
+  }
+  writeDb(db);
+  sendJson(res, 200, page);
+}
+
+// Removes a page only; its designs stay saved but are hidden from the shop until moved to another page.
+function deleteCollection(id, res) {
+  const db = readDb();
+  if (!db.collections.some((c) => c.id === id)) return sendJson(res, 404, { error: 'Page not found' });
+  db.collections = db.collections.filter((c) => c.id !== id);
+  writeDb(db);
+  sendJson(res, 200, { ok: true });
 }
 
 function deleteDesign(id, res) {
@@ -182,7 +287,8 @@ function serveStatic(req, res, pathname) {
 }
 
 fs.mkdirSync(DESIGNS_DIR, { recursive: true });
-if (!fs.existsSync(DB_FILE)) writeDb({ designs: [] });
+if (!fs.existsSync(DB_FILE)) writeDb({ designs: [], collections: DEFAULT_COLLECTIONS });
+migrate();
 
 http.createServer(async (req, res) => {
   const { pathname } = new URL(req.url, 'http://localhost');
@@ -190,6 +296,19 @@ http.createServer(async (req, res) => {
     if (pathname === '/api/designs' && req.method === 'POST') {
       if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
       return await createDesign(req, res);
+    }
+    if (pathname === '/api/collections' && req.method === 'POST') {
+      if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
+      return await createCollection(req, res);
+    }
+    const page = /^\/api\/collections\/([a-z0-9-]+)$/.exec(pathname);
+    if (page && req.method === 'DELETE') {
+      if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
+      return deleteCollection(page[1], res);
+    }
+    if (page && req.method === 'PATCH') {
+      if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
+      return await updateCollection(page[1], req, res);
     }
     const one = /^\/api\/designs\/([a-z0-9-]+)$/.exec(pathname);
     if (one && req.method === 'DELETE') {

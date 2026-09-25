@@ -31,6 +31,223 @@
     queueEl.replaceChildren(...queue.map((item) => item.el));
   }
 
+  // ---- Pages and subclasses ----
+  // The shop's pages (Pokémon, One Piece, ...), each with its own subclasses (Pikachu, 30th
+  // Anniversary, ...). Every design belongs to one page and can be tagged with that page's
+  // subclasses, which the shop shows as filters.
+  let collections = [];
+  let allDesigns = [];
+
+  const pageName = (id) => (collections.find((c) => c.id === id) || {}).name;
+
+  // "Page" dropdown plus a checkbox per subclass of the chosen page. `state` is { page, subclasses }
+  // (subclasses: array of names) and is updated in place. Re-renders when pages or subclasses change.
+  const pickers = new Set();
+  function pageField(state) {
+    const wrap = document.createElement('div');
+    wrap.className = 'page-picker';
+
+    const render = () => {
+      if (!collections.some((c) => c.id === state.page)) state.page = collections.length ? collections[0].id : null;
+      const page = collections.find((c) => c.id === state.page);
+      const keep = new Set((page ? page.subclasses : []).map(Shop.normTag));
+      state.subclasses = state.subclasses.filter((s) => keep.has(Shop.normTag(s)));
+
+      const select = document.createElement('select');
+      if (!collections.length) {
+        select.add(new Option('Add a page first', ''));
+        select.disabled = true;
+      }
+      for (const c of collections) select.add(new Option(c.name, c.id, false, c.id === state.page));
+      select.addEventListener('change', () => {
+        state.page = select.value;
+        state.subclasses = [];
+        render();
+      });
+
+      const subs = document.createElement('div');
+      subs.className = 'sub-checks';
+      if (page && page.subclasses.length) {
+        for (const s of page.subclasses) {
+          const label = document.createElement('label');
+          label.className = 'sub-check';
+          const box = document.createElement('input');
+          box.type = 'checkbox';
+          box.checked = state.subclasses.some((x) => Shop.normTag(x) === Shop.normTag(s));
+          box.addEventListener('change', () => {
+            state.subclasses = state.subclasses.filter((x) => Shop.normTag(x) !== Shop.normTag(s));
+            if (box.checked) state.subclasses.push(s);
+          });
+          label.append(box, document.createTextNode(s));
+          subs.appendChild(label);
+        }
+      } else if (page) {
+        subs.innerHTML = '<span class="tag-hint">This page has no subclasses yet. Add them in Pages above.</span>';
+      }
+
+      wrap.replaceChildren(field('Page', select));
+      if (page) {
+        const subWrap = document.createElement('div');
+        subWrap.className = 'field';
+        const title = document.createElement('span');
+        title.textContent = 'Subclasses';
+        subWrap.append(title, subs);
+        wrap.appendChild(subWrap);
+      }
+    };
+    render();
+    pickers.add(() => (wrap.isConnected ? render() : pickers.delete(render)));
+    return wrap;
+  }
+
+  const pagesEl = document.getElementById('pages');
+  const pageStatus = document.getElementById('pageStatus');
+
+  function setPageStatus(msg, isError = false) {
+    pageStatus.hidden = !msg;
+    pageStatus.textContent = msg;
+    pageStatus.classList.toggle('error', isError);
+  }
+
+  async function loadPages() {
+    try {
+      ({ designs: allDesigns, collections } = await Shop.loadCatalog(true));
+    } catch {
+      return;
+    }
+    pagesEl.replaceChildren(...collections.map(pageBlock));
+    if (!collections.length) pagesEl.textContent = 'No pages yet. Add one below.';
+    for (const refresh of [...pickers]) refresh();
+  }
+
+  // One page in the Pages list: name, design count, Remove, and its subclasses (add/remove).
+  function pageBlock(c) {
+    const count = allDesigns.filter((d) => d.page === c.id).length;
+    const block = document.createElement('div');
+    block.className = 'page-block';
+
+    const row = document.createElement('div');
+    row.className = 'page-row';
+    const name = document.createElement('span');
+    name.className = 'page-name';
+    name.textContent = c.name;
+    const meta = document.createElement('span');
+    meta.className = 'muted';
+    meta.textContent = `${count} ${count === 1 ? 'design' : 'designs'}`;
+    row.append(name, meta, linkButton('Remove', () => removePage(c, count)));
+
+    const subs = document.createElement('div');
+    subs.className = 'sub-list';
+    for (const s of c.subclasses) {
+      const n = allDesigns.filter((d) => d.page === c.id && (d.subclasses || []).some((x) => Shop.normTag(x) === Shop.normTag(s))).length;
+      const chip = document.createElement('span');
+      chip.className = 'tag';
+      chip.title = `${n} ${n === 1 ? 'design' : 'designs'}`;
+      chip.textContent = s;
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'tag-remove';
+      x.textContent = '×';
+      x.setAttribute('aria-label', `Remove subclass ${s}`);
+      x.addEventListener('click', () => removeSubclass(c, s, n));
+      chip.appendChild(x);
+      subs.appendChild(chip);
+    }
+    const form = document.createElement('form');
+    form.className = 'add-sub';
+    const input = document.createElement('input');
+    input.maxLength = 40;
+    input.placeholder = 'Add subclass, e.g. Pikachu';
+    input.setAttribute('aria-label', `New subclass for ${c.name}`);
+    const add = document.createElement('button');
+    add.type = 'submit';
+    add.className = 'btn btn-outline btn-sm';
+    add.textContent = 'Add';
+    form.append(input, add);
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      addSubclass(c, input.value);
+    });
+    subs.appendChild(form);
+
+    block.append(row, subs);
+    return block;
+  }
+
+  async function saveSubclasses(c, list, message) {
+    try {
+      await adminFetch(`/api/collections/${encodeURIComponent(c.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subclasses: list }),
+      });
+      setPageStatus(message);
+    } catch (err) {
+      setPageStatus(err.message, true);
+    }
+    await loadPages();
+    loadPublished();
+  }
+
+  function addSubclass(c, raw) {
+    const name = raw.replace(/\s+/g, ' ').trim();
+    if (!name) return;
+    if (c.subclasses.some((s) => Shop.normTag(s) === Shop.normTag(name))) {
+      setPageStatus(`"${c.name}" already has a "${name}" subclass.`, true);
+      return;
+    }
+    saveSubclasses(c, [...c.subclasses, name], `Added "${name}" to ${c.name}.`);
+  }
+
+  function removeSubclass(c, name, count) {
+    const note = count ? ` It will be untagged from ${count} ${count === 1 ? 'design' : 'designs'}.` : '';
+    if (!confirm(`Remove the "${name}" subclass from ${c.name}?${note}`)) return;
+    saveSubclasses(c, c.subclasses.filter((s) => s !== name), `Removed "${name}" from ${c.name}.`);
+  }
+
+  async function adminFetch(url, options) {
+    const res = await fetch(url, { ...options, headers: { ...(options.headers || {}), 'X-Admin-Key': keyInput.value } }).catch(() => null);
+    if (res && res.status === 403) keyField.hidden = false;
+    if (!res || !res.ok) {
+      const msg = res ? (await res.json().catch(() => ({}))).error : 'Could not reach the server.';
+      throw new Error(res && res.status === 403 ? 'Not allowed. Enter the admin password above.' : msg || 'Request failed.');
+    }
+    return res.json();
+  }
+
+  async function removePage(c, count) {
+    const note = count ? `\n\nIts ${count} ${count === 1 ? 'design stays' : 'designs stay'} saved but hidden from the shop until you move ${count === 1 ? 'it' : 'them'} to another page (Edit → Page).` : '';
+    if (!confirm(`Remove the "${c.name}" page?${note}`)) return;
+    try {
+      await adminFetch(`/api/collections/${encodeURIComponent(c.id)}`, { method: 'DELETE' });
+      setPageStatus(`Removed the "${c.name}" page.`);
+    } catch (err) {
+      setPageStatus(err.message, true);
+    }
+    await loadPages();
+    loadPublished();
+  }
+
+  document.getElementById('addPageForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = document.getElementById('newPage');
+    const name = input.value.trim();
+    if (!name) return;
+    try {
+      await adminFetch('/api/collections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      input.value = '';
+      setPageStatus(`Added the "${name}" page. Add its subclasses below it.`);
+    } catch (err) {
+      setPageStatus(err.message, true);
+    }
+    await loadPages();
+    loadPublished();
+  });
+
   function buildQueueItem(item) {
     const el = document.createElement('div');
     el.className = 'queue-item';
@@ -65,14 +282,16 @@
     name.addEventListener('input', () => { item.name = name.value; });
     nameField.appendChild(name);
 
+    const pagePicker = pageField(item);
+
     const colorField = document.createElement('label');
     colorField.className = 'field';
     colorField.innerHTML = '<span>Binder colour</span>';
     const select = document.createElement('select');
     const fillColors = () => {
       const colors = Binder.typeColors(item.type);
-      if (!colors.some((c) => c.hex === item.color)) item.color = colors[0].hex;
-      select.replaceChildren(...colors.map((c) => new Option(c.name, c.hex, false, c.hex === item.color)));
+      if (!colors.some((c) => c.id === item.color)) item.color = colors[0].id;
+      select.replaceChildren(...colors.map((c) => new Option(c.name, c.id, false, c.id === item.color)));
     };
     select.addEventListener('change', () => { item.color = select.value; draw(); });
     colorField.appendChild(select);
@@ -106,7 +325,7 @@
       renderQueue();
     });
 
-    el.append(canvas, warn, nameField, typeField, colorField, cardsField, remove);
+    el.append(canvas, warn, nameField, pagePicker, typeField, colorField, cardsField, remove);
     item.el = el;
     fillColors();
     checkRatio();
@@ -118,7 +337,7 @@
       if (!/^image\/(png|jpeg|webp)$/.test(file.type)) continue;
       const img = await Shop.loadImage(URL.createObjectURL(file)).catch(() => null);
       if (!img) continue;
-      const item = { file, img, name: nameFromFile(file), type: Binder.DEFAULT_TYPE, color: null, cards: '' };
+      const item = { file, img, name: nameFromFile(file), page: null, subclasses: [], type: Binder.DEFAULT_TYPE, color: null, cards: '' };
       buildQueueItem(item);
       queue.push(item);
     }
@@ -143,6 +362,8 @@
     const wholeNumber = (v, max) => Number.isInteger(Number(v)) && v >= 1 && v <= max;
     const badSize = queue.find((i) => i.cards === '' || !wholeNumber(i.cards, 10000));
     if (badSize) return setStatus(`"${badSize.name}" needs how many cards it holds (a whole number from 1 to 10000).`, true);
+    const noPage = queue.find((i) => !i.page);
+    if (noPage) return setStatus(`"${noPage.name}" needs a page. Add one in Pages above first.`, true);
 
     const key = keyInput.value;
     try { sessionStorage.setItem('admin-key', key); } catch { /* not remembered */ }
@@ -155,7 +376,7 @@
         const item = queue[0];
         setStatus(`Publishing ${done + 1} of ${total}…`);
         const thumbCanvas = document.createElement('canvas');
-        Binder.render(thumbCanvas, { image: item.img, color: item.color, scale: 0.5 });
+        Binder.render(thumbCanvas, { image: item.img, color: item.color, type: item.type, scale: 0.5 });
         const res = await fetch('/api/designs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Admin-Key': key },
@@ -164,6 +385,8 @@
             price,
             color: item.color,
             type: item.type,
+            page: item.page,
+            subclasses: item.subclasses,
             cards: Number(item.cards),
             art: await fileToDataUrl(item.file),
             thumb: thumbCanvas.toDataURL('image/webp', 0.85),
@@ -188,6 +411,7 @@
       setStatus(offline ? 'Could not reach the server. Start it with "npm start" and open http://localhost:3000/admin.html.' : err.message, true);
     } finally {
       publishBtn.disabled = false;
+      await loadPages();
       loadPublished();
     }
   }
@@ -203,6 +427,7 @@
       alert(res && res.status === 403 ? 'Not allowed. Enter the admin password first.' : 'Delete failed.');
       return;
     }
+    await loadPages();
     loadPublished();
   }
 
@@ -256,14 +481,26 @@
       const meta = document.createElement('span');
       meta.className = 'muted';
       meta.textContent = `${Shop.designType(d).name} · ${Binder.colorName(d.color)} · ${d.cards ?? 540} cards · ${Shop.money(d.price)}`;
+      const onPage = !!Shop.pageOf(d, collections);
+      const pages = document.createElement('span');
+      pages.className = onPage ? 'tag-hint' : 'tag-hint warn-text';
+      pages.textContent = onPage ? `Page: ${pageName(d.page)}` : 'Not on any page (hidden from the shop)';
+      const tagList = document.createElement('div');
+      tagList.className = 'tag-list';
+      for (const t of d.subclasses || []) {
+        const chip = document.createElement('span');
+        chip.className = 'tag';
+        chip.textContent = t;
+        tagList.appendChild(chip);
+      }
       const actions = document.createElement('div');
       actions.className = 'row';
       actions.append(linkButton('Edit', showEdit), linkButton('Delete', () => deleteDesign(d)));
-      el.replaceChildren(img, title, meta, actions);
+      el.replaceChildren(img, title, meta, pages, tagList, actions);
     }
 
     function showEdit() {
-      const draft = { name: d.name, type: Shop.designType(d).id, color: d.color, cards: d.cards ?? '', price: d.price };
+      const draft = { name: d.name, page: d.page, subclasses: [...(d.subclasses || [])], type: Shop.designType(d).id, color: d.color, cards: d.cards ?? '', price: d.price };
       const canvas = document.createElement('canvas');
       let art = null;
       const draw = () => {
@@ -282,8 +519,8 @@
       const colorSelect = document.createElement('select');
       const fillColors = () => {
         const colors = Binder.typeColors(draft.type);
-        if (!colors.some((c) => c.hex === draft.color)) draft.color = colors[0].hex;
-        colorSelect.replaceChildren(...colors.map((c) => new Option(c.name, c.hex, false, c.hex === draft.color)));
+        if (!colors.some((c) => c.id === draft.color)) draft.color = colors[0].id;
+        colorSelect.replaceChildren(...colors.map((c) => new Option(c.name, c.id, false, c.id === draft.color)));
       };
       fillColors();
       typeSelect.addEventListener('change', () => { draft.type = typeSelect.value; fillColors(); draw(); });
@@ -319,7 +556,7 @@
       save.addEventListener('click', async () => {
         error.hidden = true;
         save.disabled = true;
-        const body = { name: draft.name.trim(), type: draft.type, color: draft.color, cards: Number(draft.cards), price: Number(draft.price) };
+        const body = { name: draft.name.trim(), page: draft.page, subclasses: draft.subclasses, type: draft.type, color: draft.color, cards: Number(draft.cards), price: Number(draft.price) };
         // The shop thumbnail shows the type and colour, so redraw it when either changed.
         if ((draft.type !== Shop.designType(d).id || draft.color !== d.color) && art) {
           const thumb = document.createElement('canvas');
@@ -347,7 +584,8 @@
       actions.className = 'row';
       actions.append(save, linkButton('Cancel', showView));
 
-      el.replaceChildren(canvas, field('Name', name), field('Binder type', typeSelect),
+      el.replaceChildren(canvas, field('Name', name), pageField(draft),
+        field('Binder type', typeSelect),
         field('Binder colour', colorSelect), sizeRow, error, actions);
     }
 
@@ -375,5 +613,5 @@
   window.addEventListener('drop', (e) => e.preventDefault());
   publishBtn.addEventListener('click', publish);
 
-  loadPublished();
+  loadPages().then(loadPublished);
 })();

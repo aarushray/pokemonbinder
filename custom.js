@@ -41,13 +41,32 @@ function setType(id) {
   ratioHint.textContent = `PNG or JPG, ${w}:${h} ratio (e.g. ${w * 500} × ${h * 500})`;
   stretchOption.textContent = `Stretch to ${w}:${h}`;
 
-  // Keep the chosen colour if this binder comes in it, otherwise use the type's first colour.
-  const colors = Binder.typeColors(id);
-  const color = colors.some((c) => c.hex === state.color) ? state.color : colors[0].hex;
-  Shop.swatches(document.getElementById('swatches'), colors, color, setColor);
+  // Binders with texture choices (the 9-pocket) show a dropdown that limits the colours.
+  const list = Binder.finishes(id);
+  finishField.hidden = !list;
+  // Every other binder only comes in the diamond texture, shown as a fixed label.
+  document.getElementById('finishFixed').hidden = !!list;
+  state.finish = list ? Binder.finishOf(id, state.color) : null;
+  if (list) finishSelect.replaceChildren(...list.map((f) => new Option(f.name, f.id, false, f.id === state.finish)));
   showImageInfo();
+  showColors();
+}
+
+// Swatches for the current binder type and texture. Keeps the chosen colour if it's still
+// offered, otherwise picks the first one.
+function showColors() {
+  const colors = Binder.finishColors(state.type, state.finish);
+  const color = colors.some((c) => c.id === state.color) ? state.color : colors[0].id;
+  Shop.swatches(document.getElementById('swatches'), colors, color, setColor);
   setColor(color);
 }
+
+const finishField = document.getElementById('finishField');
+const finishSelect = document.getElementById('finish');
+finishSelect.addEventListener('change', () => {
+  state.finish = finishSelect.value;
+  showColors();
+});
 
 for (const t of Binder.TYPES) {
   const b = document.createElement('button');
@@ -141,5 +160,5 @@ downloadBtn.addEventListener('click', () => {
   }, 'image/png');
 });
 
+// Start with a blank binder; the design appears once one is uploaded (or the sample is chosen).
 setType(state.type);
-if (window.SAMPLE_DESIGN) loadImage(window.SAMPLE_DESIGN, 'Sylveon sample');

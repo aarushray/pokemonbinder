@@ -1,17 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Custom Designs · PokeEngrave</title>
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
   <header class="site-header">
     <div class="container">
       <a class="logo" href="index.html">PokeEngrave</a>
       <nav class="nav">
-        <a href="index.html">Shop</a>
+        <a href="index.html">Home</a>
         <a href="custom.html" aria-current="page">Custom Designs</a>
         <a href="cart.html">Cart (<span data-cart-count>0</span>)</a>
       </nav>
@@ -29,6 +31,14 @@
         <div class="group">
           <h2>Binder</h2>
           <div id="types" class="type-options" role="radiogroup" aria-label="Binder type"></div>
+          <label id="finishField" class="field finish-field" hidden>
+            <span>Texture</span>
+            <select id="finish"></select>
+          </label>
+          <div id="finishFixed" class="field finish-field" hidden>
+            <span>Texture</span>
+            <div class="fixed-value">Diamond texture</div>
+          </div>
         </div>
 
         <div class="group">
@@ -85,4 +95,5 @@
   <script src="common.js"></script>
   <script src="custom.js"></script>
 </body>
+
 </html>

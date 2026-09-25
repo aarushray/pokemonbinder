@@ -7,7 +7,7 @@
   <title>Manage Designs · PokeEngrave</title>
   <link rel="stylesheet" href="style.css" />
 </head>
-<body>
+<body data-no-pages>
   <header class="site-header">
     <div class="container">
       <a class="logo" href="index.html">PokeEngrave</a>
@@ -23,6 +23,19 @@
       <h1>Manage designs</h1>
       <p>Upload artwork, choose each binder's type, colour and price, then publish it to the shop.</p>
     </div>
+
+    <section class="panel pages-panel">
+      <div class="group">
+        <h2>Pages</h2>
+        <p class="note">Each page of the shop has its own subclasses, shown to customers as filters. Removing a page or subclass never deletes designs.</p>
+        <div id="pages" class="page-list"></div>
+        <form id="addPageForm" class="add-page">
+          <input id="newPage" maxlength="40" placeholder="New page name, e.g. Dragon Ball" aria-label="New page name" />
+          <button class="btn" type="submit">Add page</button>
+        </form>
+        <p id="pageStatus" class="status" hidden></p>
+      </div>
+    </section>
 
     <section class="panel">
       <div class="group">

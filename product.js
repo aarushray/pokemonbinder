@@ -4,8 +4,11 @@
   const missing = document.getElementById('missing');
 
   let design;
+  let collections = [];
   try {
-    design = (await Shop.loadDesigns()).find((d) => d.id === id);
+    const catalog = await Shop.loadCatalog();
+    collections = catalog.collections;
+    design = catalog.designs.find((d) => d.id === id);
   } catch {
     // handled below as "not found"
   }
@@ -15,19 +18,21 @@
   }
 
   document.title = `${design.name} · PokeEngrave`;
+  Shop.setPage(Shop.pageOf(design, collections)); // header dropdown and "All designs" follow this design's page
   document.getElementById('name').textContent = design.name;
   document.getElementById('price').textContent = Shop.money(design.price);
   const type = Shop.designType(design);
   const colors = Binder.typeColors(type.id);
   document.getElementById('typeName').textContent = `${type.name} binder`;
-  document.getElementById('pockets').textContent = `${type.pockets} pockets per page, side-loading`;  document.getElementById('cards').textContent = `Holds ${design.cards ?? 540} cards`;
+  document.getElementById('pockets').textContent = `${type.pockets} pockets per page, side-loading`;
+  document.getElementById('cards').textContent = `Holds ${design.cards ?? 540} cards`;
   document.getElementById('product').hidden = false;
 
   const canvas = document.getElementById('canvas');
   const colorName = document.getElementById('colorName');
   // The home page passes the colour picked on the card, if any.
   const requested = new URLSearchParams(location.search).get('color');
-  let color = colors.some((c) => c.hex === requested) ? requested : design.color;
+  let color = colors.some((c) => c.id === requested) ? requested : design.color;
   let art = null;
 
   function draw() {
@@ -35,9 +40,63 @@
     Binder.render(canvas, { image: art, color, type: type.id });
   }
 
-  Shop.swatches(document.getElementById('swatches'), colors, color, (hex) => {
-    color = hex;
-    draw();
+  const swatchesEl = document.getElementById('swatches');
+
+  // Colour wheel after the preset swatches: any custom binder colour (woven texture only).
+  const wheel = document.createElement('label');
+  wheel.className = 'swatch swatch-wheel';
+  wheel.title = 'Custom colour';
+  const picker = document.createElement('input');
+  picker.type = 'color';
+  picker.value = Binder.colorHex(color);
+  picker.setAttribute('aria-label', 'Custom binder colour');
+  wheel.appendChild(picker);
+
+  // Binders with texture choices (the 9-pocket) get a dropdown that limits the colours shown.
+  const finishes = Binder.finishes(type.id);
+  let finish = Binder.finishOf(type.id, color);
+  const finishSelect = document.getElementById('finish');
+  document.getElementById('finishField').hidden = !finishes;
+  // Every other binder only comes in the diamond texture, shown as a fixed label.
+  document.getElementById('finishFixed').hidden = !!finishes;
+  if (finishes) {
+    finishSelect.replaceChildren(...finishes.map((f) => new Option(f.name, f.id, false, f.id === finish)));
+    finishSelect.addEventListener('change', () => {
+      finish = finishSelect.value;
+      showSwatches();
+      if (art) draw();
+      else colorName.textContent = Binder.colorName(color);
+    });
+  }
+
+  function showSwatches() {
+    const list = Binder.finishColors(type.id, finish);
+    if (!list.some((c) => c.id === color)) {
+      color = list.some((c) => c.id === design.color) ? design.color : list[0].id;
+    }
+    Shop.swatches(swatchesEl, list, color, (id) => {
+      color = id;
+      wheel.style.removeProperty('--pick');
+      draw();
+    });
+    wheel.setAttribute('aria-checked', 'false');
+    wheel.style.removeProperty('--pick');
+    if (list.every((c) => !c.texture)) swatchesEl.appendChild(wheel);
+  }
+  showSwatches();
+
+  let pending = false;
+  picker.addEventListener('input', () => {
+    for (const el of swatchesEl.children) el.setAttribute('aria-checked', String(el === wheel));
+    color = picker.value;
+    wheel.style.setProperty('--pick', color);
+    colorName.textContent = Binder.colorName(color);
+    if (pending || !art) return;
+    pending = true; // dragging in the picker fires many events; render at most once per frame
+    requestAnimationFrame(() => {
+      pending = false;
+      draw();
+    });
   });
 
   // Show the pre-rendered thumbnail instantly, then the full-resolution render once the art loads.
