@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Contact · PokeEngrave</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="index.html">PokeEngrave</a>
+      <nav class="nav">
+        <a href="index.html">Home</a>
+        <a href="custom.html">Custom Designs</a>
+        <a href="contact.html" aria-current="page">Contact</a>
+        <a href="cart.html">Cart (<span data-cart-count>0</span>)</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container contact">
+    <div class="intro">
+      <h1>Contact</h1>
+      <p>Tell us about the art you'd like engraved and we'll get back to you on Telegram.</p>
+    </div>
+
+    <form id="contactForm" class="contact-form" novalidate>
+      <div class="contact-row">
+        <input id="name" name="name" maxlength="80" placeholder="Name" aria-label="Name" autocomplete="name" required />
+        <input id="telegram" name="telegram" maxlength="33" placeholder="Telegram Handle" aria-label="Telegram handle" autocomplete="off" required />
+      </div>
+      <input id="phone" name="phone" type="tel" maxlength="30" placeholder="Phone" aria-label="Phone" autocomplete="tel" />
+      <textarea id="description" name="description" rows="8" maxlength="5000" placeholder="Description of art" aria-label="Description of art" required></textarea>
+      <div>
+        <button id="submitBtn" class="btn" type="submit">Submit</button>
+      </div>
+      <p id="status" class="status" role="status" hidden></p>
+    </form>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">© PokeEngrave</div>
+  </footer>
+
+  <script src="js/catalog.js"></script>
+  <script src="js/binder.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/contact.js"></script>
+</body>
+
+</html>

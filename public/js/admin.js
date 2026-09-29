@@ -311,7 +311,6 @@
     cards.min = '1';
     cards.max = '10000';
     cards.step = '1';
-    cards.placeholder = 'e.g. 360';
     cards.value = item.cards;
     cards.addEventListener('input', () => { item.cards = cards.value; });
     cardsField.appendChild(cards);

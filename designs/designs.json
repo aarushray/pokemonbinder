@@ -10,7 +10,7 @@
       "art": "designs/dragon-ball-collector-9e7fcb-art.jpg",
       "thumb": "designs/dragon-ball-collector-9e7fcb-thumb.webp",
       "createdAt": "2026-09-25T00:20:27.026Z",
-      "updatedAt": "2026-09-25T00:20:47.930Z",
+      "updatedAt": "2026-09-29T13:08:38.388Z",
       "page": "dragon-ball",
       "subclasses": []
     },
@@ -28,7 +28,7 @@
       "subclasses": [
         "Luffy"
       ],
-      "updatedAt": "2026-09-25T00:33:33.740Z"
+      "updatedAt": "2026-09-29T13:08:38.809Z"
     },
     {
       "id": "charizard-pikachu-0af22a",
@@ -45,7 +45,7 @@
         "Pikachu",
         "Charizard"
       ],
-      "updatedAt": "2026-09-25T00:30:34.901Z"
+      "updatedAt": "2026-09-29T13:08:39.121Z"
     },
     {
       "id": "greninja-30th-anniversary-e53a94",
@@ -61,7 +61,7 @@
       "subclasses": [
         "30th Anniversary"
       ],
-      "updatedAt": "2026-09-25T00:30:29.734Z"
+      "updatedAt": "2026-09-29T13:08:39.465Z"
     },
     {
       "id": "sylveon-image-867699",
@@ -73,7 +73,7 @@
       "art": "designs/sylveon-image-867699-art.jpg",
       "thumb": "designs/sylveon-image-867699-thumb.webp",
       "createdAt": "2026-09-24T13:43:53.899Z",
-      "updatedAt": "2026-09-25T00:32:15.766Z",
+      "updatedAt": "2026-09-29T13:08:39.763Z",
       "page": "pokemon",
       "subclasses": [
         "30th Anniversary",
@@ -90,7 +90,7 @@
       "art": "designs/mew-e20fef-art.jpg",
       "thumb": "designs/mew-e20fef-thumb.webp",
       "createdAt": "2026-09-24T13:43:27.683Z",
-      "updatedAt": "2026-09-25T00:30:33.183Z",
+      "updatedAt": "2026-09-29T13:08:40.156Z",
       "page": "pokemon",
       "subclasses": [
         "30th Anniversary"
@@ -106,7 +106,7 @@
       "thumb": "designs/lucario-abeaee-thumb.webp",
       "createdAt": "2026-09-24T12:26:44.545Z",
       "type": "9-pocket",
-      "updatedAt": "2026-09-25T00:30:36.605Z",
+      "updatedAt": "2026-09-29T13:08:40.424Z",
       "page": "pokemon",
       "subclasses": [
         "Lucario"

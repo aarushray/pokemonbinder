@@ -1,10 +1,16 @@
 // Serves the site and the designer upload API. No dependencies: run with `node server.js`.
 //
+// Layout: public/ holds everything the browser loads (HTML pages, css/, js/). Only public/ and
+// designs/ are served, so this file, package.json and .data/ never are.
+//
 // Data lives in designs/designs.json: { designs: [...], collections: [{ id, name, subclasses }] }.
 // Collections are the shop's pages. Each design belongs to one page (`page`, a collection id) and
 // may be tagged with some of that page's subclasses (`subclasses`), which the shop uses as filters.
 //
-// Admin actions (upload/edit/delete designs, add/remove pages) are allowed from this computer only, unless
+// Contact-form messages are saved in .data/messages.json. The dot folder is never served to
+// browsers and is ignored by git, so customers' details stay on this computer.
+//
+// Admin actions (upload/edit/delete designs, add/remove pages, read messages) are allowed from this computer only, unless
 // ADMIN_PASSWORD is set, in which case requests must send it in the X-Admin-Key header.
 const http = require('http');
 const fs = require('fs');
@@ -12,13 +18,16 @@ const path = require('path');
 const crypto = require('crypto');
 
 const ROOT = __dirname;
+const PUBLIC_DIR = path.join(ROOT, 'public');
 const DESIGNS_DIR = path.join(ROOT, 'designs');
 const DB_FILE = path.join(DESIGNS_DIR, 'designs.json');
+const DATA_DIR = path.join(ROOT, '.data');
+const MESSAGES_FILE = path.join(DATA_DIR, 'messages.json');
 const PORT = Number(process.env.PORT) || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const MAX_BODY = 40 * 1024 * 1024;
 
-const { TYPES: BINDER_TYPES } = require('./catalog.js');
+const { TYPES: BINDER_TYPES } = require('./public/js/catalog.js');
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -98,14 +107,14 @@ function sendJson(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
-function readBody(req) {
+function readBody(req, max = MAX_BODY) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
     req.on('data', (c) => {
       size += c.length;
-      if (size > MAX_BODY) {
-        reject(Object.assign(new Error('Upload too large (40 MB max)'), { status: 413 }));
+      if (size > max) {
+        reject(Object.assign(new Error(max === MAX_BODY ? 'Upload too large (40 MB max)' : 'Message too long'), { status: 413 }));
         req.destroy();
       } else chunks.push(c);
     });
@@ -259,6 +268,46 @@ function deleteDesign(id, res) {
   sendJson(res, 200, { ok: true });
 }
 
+function readMessages() {
+  try {
+    return JSON.parse(fs.readFileSync(MESSAGES_FILE, 'utf8'));
+  } catch {
+    return [];
+  }
+}
+
+function writeMessages(list) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(MESSAGES_FILE + '.tmp', JSON.stringify(list, null, 2));
+  fs.renameSync(MESSAGES_FILE + '.tmp', MESSAGES_FILE);
+}
+
+// Saves a message from the contact page. Anyone can send one; only the admin can read them.
+async function createMessage(req, res) {
+  const body = JSON.parse(await readBody(req, 64 * 1024));
+  const text = (v, max) => String(v ?? '').trim().slice(0, max);
+  const name = text(body.name, 80);
+  const telegram = text(body.telegram, 40).replace(/^@/, '');
+  const phone = text(body.phone, 30);
+  const description = text(body.description, 5000);
+  if (!name) return sendJson(res, 400, { error: 'Please enter your name' });
+  if (!/^[A-Za-z0-9_]{5,32}$/.test(telegram)) return sendJson(res, 400, { error: 'Please enter a valid Telegram handle (5-32 letters, numbers or underscores)' });
+  if (phone && !/^[0-9+()\-\s]{6,30}$/.test(phone)) return sendJson(res, 400, { error: 'Please enter a valid phone number' });
+  if (!description) return sendJson(res, 400, { error: 'Please describe the art you would like' });
+  const list = readMessages();
+  if (list.length >= 5000) return sendJson(res, 503, { error: "We can't take new messages right now. Please try again later." });
+  list.unshift({ id: crypto.randomUUID(), name, telegram, phone, description, createdAt: new Date().toISOString() });
+  writeMessages(list);
+  sendJson(res, 201, { ok: true });
+}
+
+function deleteMessage(id, res) {
+  const list = readMessages();
+  if (!list.some((m) => m.id === id)) return sendJson(res, 404, { error: 'Message not found' });
+  writeMessages(list.filter((m) => m.id !== id));
+  sendJson(res, 200, { ok: true });
+}
+
 function serveStatic(req, res, pathname) {
   let rel;
   try {
@@ -268,10 +317,13 @@ function serveStatic(req, res, pathname) {
     return;
   }
   if (rel.endsWith('/')) rel += 'index.html';
-  const file = path.join(ROOT, rel);
-  const inside = file.startsWith(ROOT + path.sep);
+  // /designs/... comes from the designs folder; everything else from public/.
+  const fromDesigns = rel.startsWith('/designs/');
+  const base = fromDesigns ? DESIGNS_DIR : PUBLIC_DIR;
+  const file = path.join(base, fromDesigns ? rel.slice('/designs'.length) : rel);
+  const inside = file.startsWith(base + path.sep);
   const hidden = rel.split('/').some((seg) => seg.startsWith('.'));
-  if (!inside || hidden || rel.toLowerCase() === '/server.js') {
+  if (!inside || hidden) {
     res.writeHead(404).end('Not found');
     return;
   }
@@ -296,6 +348,16 @@ http.createServer(async (req, res) => {
     if (pathname === '/api/designs' && req.method === 'POST') {
       if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
       return await createDesign(req, res);
+    }
+    if (pathname === '/api/messages' && req.method === 'POST') return await createMessage(req, res);
+    if (pathname === '/api/messages' && req.method === 'GET') {
+      if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
+      return sendJson(res, 200, readMessages());
+    }
+    const msg = /^\/api\/messages\/([a-f0-9-]+)$/.exec(pathname);
+    if (msg && req.method === 'DELETE') {
+      if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
+      return deleteMessage(msg[1], res);
     }
     if (pathname === '/api/collections' && req.method === 'POST') {
       if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });

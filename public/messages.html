@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Messages · PokeEngrave</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body data-no-pages>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="index.html">PokeEngrave</a>
+      <nav class="nav">
+        <a href="index.html">Shop</a>
+        <a href="admin.html">Manage designs</a>
+        <a href="messages.html" data-right aria-current="page">Messages</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="intro">
+      <h1>Messages</h1>
+      <p>Sent from the Contact page, newest first.</p>
+    </div>
+
+    <form id="keyForm" class="add-page" hidden>
+      <input id="adminKey" type="password" autocomplete="current-password" placeholder="Admin password" aria-label="Admin password" />
+      <button class="btn" type="submit">Show messages</button>
+    </form>
+
+    <div class="section-head">
+      <span id="messageCount" class="muted"></span>
+    </div>
+    <div id="messages" class="message-list"></div>
+    <p id="noMessages" class="empty" hidden>No messages yet. They appear here when someone sends the Contact form.</p>
+    <p id="messageStatus" class="status error" hidden></p>
+  </main>
+
+  <script src="js/catalog.js"></script>
+  <script src="js/binder.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/messages.js"></script>
+</body>
+</html>

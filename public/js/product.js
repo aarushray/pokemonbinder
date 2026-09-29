@@ -25,7 +25,6 @@
   const colors = Binder.typeColors(type.id);
   document.getElementById('typeName').textContent = `${type.name} binder`;
   document.getElementById('pockets').textContent = `${type.pockets} pockets per page, side-loading`;
-  document.getElementById('cards').textContent = `Holds ${design.cards ?? 540} cards`;
   document.getElementById('product').hidden = false;
 
   const canvas = document.getElementById('canvas');
@@ -56,6 +55,13 @@
   const finishes = Binder.finishes(type.id);
   let finish = Binder.finishOf(type.id, color);
   const finishSelect = document.getElementById('finish');
+  const cardsEl = document.getElementById('cards');
+  // Some textures have a fixed capacity (velvet always holds 540); otherwise use the design's own.
+  const showCards = () => {
+    const fixed = (finishes || []).find((f) => f.id === finish)?.cards;
+    cardsEl.textContent = `Holds ${fixed ?? design.cards ?? 540} cards`;
+  };
+  showCards();
   document.getElementById('finishField').hidden = !finishes;
   // Every other binder only comes in the diamond texture, shown as a fixed label.
   document.getElementById('finishFixed').hidden = !!finishes;
@@ -63,6 +69,7 @@
     finishSelect.replaceChildren(...finishes.map((f) => new Option(f.name, f.id, false, f.id === finish)));
     finishSelect.addEventListener('change', () => {
       finish = finishSelect.value;
+      showCards();
       showSwatches();
       if (art) draw();
       else colorName.textContent = Binder.colorName(color);

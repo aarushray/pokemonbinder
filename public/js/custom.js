@@ -6,9 +6,6 @@ const state = {
   image: null,
   type: Binder.DEFAULT_TYPE,
   color: null,
-  fit: 'cover',
-  invert: false,
-  insideStitch: true,
 };
 let imageLabel = '';
 
@@ -31,15 +28,13 @@ function setColor(hex) {
 
 const typesEl = document.getElementById('types');
 const ratioHint = document.getElementById('ratioHint');
-const stretchOption = document.getElementById('stretchOption');
 
 function setType(id) {
   state.type = id;
   const t = Binder.getType(id);
   const [w, h] = t.ratio;
-  for (const el of typesEl.children) el.setAttribute('aria-checked', String(el.dataset.id === id));
+  for (const el of typesEl.querySelectorAll('.type-option')) el.setAttribute('aria-checked', String(el.dataset.id === id));
   ratioHint.textContent = `PNG or JPG, ${w}:${h} ratio (e.g. ${w * 500} × ${h * 500})`;
-  stretchOption.textContent = `Stretch to ${w}:${h}`;
 
   // Binders with texture choices (the 9-pocket) show a dropdown that limits the colours.
   const list = Binder.finishes(id);
@@ -78,13 +73,19 @@ for (const t of Binder.TYPES) {
   b.firstChild.textContent = t.name;
   b.lastChild.textContent = `${t.ratio[0]}:${t.ratio[1]} art`;
   b.addEventListener('click', () => setType(t.id));
-  typesEl.appendChild(b);
+  // Base price sits beside the option box.
+  const row = document.createElement('div');
+  row.className = 'type-row';
+  const price = document.createElement('span');
+  price.className = 'type-price';
+  price.textContent = `$${t.basePrice}`;
+  row.append(b, price);
+  typesEl.appendChild(row);
 }
 
 const fileInput = document.getElementById('fileInput');
 const dropzone = document.getElementById('dropzone');
 const fileInfo = document.getElementById('fileInfo');
-const downloadBtn = document.getElementById('downloadBtn');
 
 // Shows the loaded image's size and whether it matches the selected binder's ratio.
 function showImageInfo() {
@@ -96,7 +97,7 @@ function showImageInfo() {
   fileInfo.classList.toggle('warn', !ok);
   fileInfo.textContent = ok
     ? `${imageLabel}: ${img.naturalWidth} × ${img.naturalHeight} (${w}:${h})`
-    : `${imageLabel}: ${img.naturalWidth} × ${img.naturalHeight} is not ${w}:${h}. It will be adjusted using the Fit setting below.`;
+    : `${imageLabel}: ${img.naturalWidth} × ${img.naturalHeight} is not ${w}:${h}. It will be cropped to fill the cover.`;
 }
 
 function loadImage(src, label) {
@@ -105,7 +106,6 @@ function loadImage(src, label) {
     state.image = img;
     imageLabel = label;
     showImageInfo();
-    downloadBtn.disabled = false;
     scheduleRender();
   };
   img.onerror = () => {
@@ -138,26 +138,6 @@ window.addEventListener('drop', (e) => { e.preventDefault(); loadFile(e.dataTran
 
 document.getElementById('sampleBtn').addEventListener('click', () => {
   if (window.SAMPLE_DESIGN) loadImage(window.SAMPLE_DESIGN, 'Sylveon sample');
-});
-
-document.getElementById('fitMode').addEventListener('change', (e) => {
-  state.fit = e.target.value;
-  scheduleRender();
-});
-
-document.getElementById('invert').addEventListener('change', (e) => {
-  state.invert = e.target.checked;
-  scheduleRender();
-});
-
-downloadBtn.addEventListener('click', () => {
-  canvas.toBlob((blob) => {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `binder-mockup-${state.type}.png`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  }, 'image/png');
 });
 
 // Start with a blank binder; the design appears once one is uploaded (or the sample is chosen).

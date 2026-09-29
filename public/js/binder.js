@@ -1,10 +1,9 @@
 // Shared binder mockup renderer: engraves a design onto a solid-colour binder of a given type.
 // Used by the shop, product, cart, admin and Custom Designs pages. Requires catalog.js.
 (function () {
-  const { COLORS, TYPES, DEFAULT_TYPE } = window.Catalog;
+  const { COLORS, DEFAULT_DEPTH, TYPES, DEFAULT_TYPE } = window.Catalog;
 
   // Engraving settings are fixed, not user-adjustable.
-  const DEPTH = 2;
   const CLEAN = 0.08; // ignore faint grey paper tones in the design
 
   // Geometry at scale 1. Every cover is 1000px wide; its height follows the type's art ratio,
@@ -43,9 +42,9 @@
   // Anything else (e.g. a colour since removed from the catalogue) falls back to the first colour.
   function resolveColor(value) {
     const c = COLORS.find((c) => c.id === value);
-    if (c) return { hex: c.hex, texture: c.texture || 'diamond' };
-    if (/^#[0-9a-f]{6}$/i.test(value)) return { hex: value, texture: 'diamond' };
-    return { hex: COLORS[0].hex, texture: COLORS[0].texture || 'diamond' };
+    if (c) return { hex: c.hex, texture: c.texture || 'diamond', depth: c.depth || DEFAULT_DEPTH };
+    if (/^#[0-9a-f]{6}$/i.test(value)) return { hex: value, texture: 'diamond', depth: DEFAULT_DEPTH };
+    return resolveColor(COLORS[0].id);
   }
 
   function colorHex(value) {
@@ -183,7 +182,7 @@
     return textures.get(key);
   }
 
-  // Per-pixel engraving strength (0..1) for the cover. Cached so colour changes re-render fast.
+  // Per-pixel engraving tone (0..1) for the cover, before depth is applied. Cached so colour changes re-render fast.
   let maskCache = null;
   function designMask(image, fit, invert, w, h) {
     if (!image) return null;
@@ -218,13 +217,28 @@
       d = (d - CLEAN) / (1 - CLEAN);
       if (d <= 0) continue;
       if (d > 1) d = 1;
-      mask[i] = Math.min(1, d * d * (3 - 2 * d) * DEPTH); // smoothstep adds laser-like contrast
+      mask[i] = d * d * (3 - 2 * d); // smoothstep adds laser-like contrast
     }
     maskCache = { image, fit, invert, w, h, mask };
     return mask;
   }
 
-  function renderSurface(base, mask, bw, bh, spineW, coverW, scale, texture) {
+  // Depth up to 200% strengthens the engraving (mask gain up to 2x). Beyond that it keeps adding a
+  // little gain but mostly deepens the engraved colour toward a near-black (or, on dark binders,
+  // near-white) tone of the binder's hue, so the artwork gets bolder without losing its detail.
+  function depthSettings(base, depth) {
+    const k = Math.max(0, depth) / 100;
+    const gain = k <= 2 ? k : 2 + (k - 2) * 0.25;
+    const extra = Math.min(1, Math.max(0, (k - 2) / 8));
+    let eng = engraveColor(base);
+    if (extra > 0) {
+      const deep = luminance(base) < 0.28 ? base.map((v) => v + (255 - v) * 0.92) : base.map((v) => v * 0.12);
+      eng = eng.map((v, j) => v + (deep[j] - v) * extra);
+    }
+    return { gain, eng };
+  }
+
+  function renderSurface(base, mask, bw, bh, spineW, coverW, scale, texture, depth) {
     const surf = document.createElement('canvas');
     surf.width = bw;
     surf.height = bh;
@@ -232,7 +246,7 @@
     const out = s.createImageData(bw, bh);
     const d = out.data;
     const tex = getTexture(bw, bh, scale, texture);
-    const eng = engraveColor(base);
+    const { gain, eng } = depthSettings(base, depth);
     const spine = shade(base, 0.9);
     // The laser flattens the diamond relief, so the pattern fades where the design is engraved
     // and the artwork stays crisp. (Velvet keeps its mottling everywhere.)
@@ -246,7 +260,7 @@
         if (x < spineW) {
           [r, g, b] = spine;
         } else {
-          const m = mask ? mask[y * coverW + (x - spineW)] : 0;
+          const m = mask ? Math.min(1, mask[y * coverW + (x - spineW)] * gain) : 0;
           r = base[0] + (eng[0] - base[0]) * m;
           g = base[1] + (eng[1] - base[1]) * m;
           b = base[2] + (eng[2] - base[2]) * m;
@@ -264,8 +278,7 @@
   }
 
   // Draws the binder (with shadow, on a transparent background) into `canvas`, resizing it.
-  // `insideStitch` keeps the engraving within the stitched line instead of running to the edge.
-  function render(canvas, { image = null, color = COLORS[0].id, type = DEFAULT_TYPE, fit = 'cover', invert = false, scale: frameScale = 1, insideStitch = false } = {}) {
+  function render(canvas, { image = null, color = COLORS[0].id, type = DEFAULT_TYPE, fit = 'cover', invert = false, scale: frameScale = 1 } = {}) {
     const t = getType(type);
     // Binders with a `display` factor are drawn smaller, centred in a picture sized like the 9-pocket's.
     const scale = frameScale * (t.shape.display || 1);
@@ -277,7 +290,7 @@
     const bw = spineW + coverW;
     const bh = coverH;
     const radii = [LEFT_RADIUS, t.shape.radius, t.shape.radius, LEFT_RADIUS].map((r) => r * scale);
-    const { hex, texture } = resolveColor(color);
+    const { hex, texture, depth } = resolveColor(color);
     const base = hexToRgb(hex);
     const dark = luminance(base) < 0.28;
     // A shortened binder keeps the full-height canvas (so it displays at the same size and
@@ -303,9 +316,10 @@
       ctx.roundRect(x0, y0, bw, bh, radii);
     };
     const inset = 13 * scale;
+    // The left line of stitching runs along the spine fold, where the engraving starts.
     const stitchPath = () => {
       ctx.beginPath();
-      ctx.roundRect(x0 + inset, y0 + inset, bw - inset * 2, bh - inset * 2,
+      ctx.roundRect(x0 + spineW, y0 + inset, bw - spineW - inset, bh - inset * 2,
         radii.map((r) => Math.max(4 * scale, r - inset)));
     };
 
@@ -331,13 +345,13 @@
     path();
     ctx.clip();
     const mask = designMask(image, fit, invert, coverW, coverH);
-    ctx.drawImage(renderSurface(base, insideStitch ? null : mask, bw, bh, spineW, coverW, scale, texture), x0, y0);
-    if (insideStitch && mask) {
-      // Plain fabric everywhere, then the engraved surface only inside the stitching.
+    // Plain fabric everywhere, then the engraved surface only inside the stitching.
+    ctx.drawImage(renderSurface(base, null, bw, bh, spineW, coverW, scale, texture, depth), x0, y0);
+    if (mask) {
       ctx.save();
       stitchPath();
       ctx.clip();
-      ctx.drawImage(renderSurface(base, mask, bw, bh, spineW, coverW, scale, texture), x0, y0);
+      ctx.drawImage(renderSurface(base, mask, bw, bh, spineW, coverW, scale, texture, depth), x0, y0);
       ctx.restore();
     }
 

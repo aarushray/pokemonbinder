@@ -169,7 +169,10 @@ const Shop = (() => {
     let cart = null;
     for (const a of container.querySelectorAll('.nav a')) {
       if (a.getAttribute('href') === 'cart.html') cart = a;
-      else left.appendChild(a);
+      else if (a.hasAttribute('data-right')) {
+        a.classList.add('header-button');
+        right.appendChild(a);
+      } else left.appendChild(a);
     }
     center.appendChild(logo);
     container.replaceChildren(left, center, right);

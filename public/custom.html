@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Custom Designs · PokeEngrave</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="css/style.css" />
 </head>
 
 <body>
@@ -15,6 +15,7 @@
       <nav class="nav">
         <a href="index.html">Home</a>
         <a href="custom.html" aria-current="page">Custom Designs</a>
+        <a href="contact.html">Contact</a>
         <a href="cart.html">Cart (<span data-cart-count>0</span>)</a>
       </nav>
     </div>
@@ -24,6 +25,7 @@
     <div class="intro">
       <h1>Custom Designs</h1>
       <p>Pick a binder, upload your design and preview it laser-engraved.</p>
+      <p>Don't have a design, or have questions about one? <a href="contact.html">Contact us</a>.</p>
     </div>
 
     <div class="designer">
@@ -57,26 +59,6 @@
           <div id="swatches" class="swatches" role="radiogroup" aria-label="Binder colour"></div>
           <p id="colorName" class="note"></p>
         </div>
-
-        <div class="group">
-          <h2>Engraving</h2>
-          <label class="field">
-            <span>Fit</span>
-            <select id="fitMode">
-              <option value="cover">Crop to fill the cover</option>
-              <option value="contain">Fit inside (no cropping)</option>
-              <option id="stretchOption" value="stretch">Stretch to fit</option>
-            </select>
-          </label>
-          <label class="check">
-            <input id="invert" type="checkbox" />
-            <span>Invert design (engrave the light areas)</span>
-          </label>
-        </div>
-
-        <div class="group">
-          <button id="downloadBtn" class="btn btn-block" type="button" disabled>Download mockup (PNG)</button>
-        </div>
       </section>
 
       <section class="stage" aria-label="Preview">
@@ -89,11 +71,11 @@
     <div class="container">© PokeEngrave</div>
   </footer>
 
-  <script src="sample.js"></script>
-  <script src="catalog.js"></script>
-  <script src="binder.js"></script>
-  <script src="common.js"></script>
-  <script src="custom.js"></script>
+  <script src="js/sample.js"></script>
+  <script src="js/catalog.js"></script>
+  <script src="js/binder.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/custom.js"></script>
 </body>
 
 </html>
