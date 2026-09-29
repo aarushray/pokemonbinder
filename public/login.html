@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Log in · PokeEngrave</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="index.html">PokeEngrave</a>
+      <nav class="nav">
+        <a href="index.html">Home</a>
+        <a href="custom.html">Custom Designs</a>
+        <a href="contact.html">Contact</a>
+        <a href="cart.html">Cart (<span data-cart-count>0</span>)</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container auth">
+    <div class="intro">
+      <h1>Log in</h1>
+      <p>Welcome back. Log in to your PokeEngrave account.</p>
+    </div>
+
+    <p id="reasonNotice" class="auth-reason" role="status" hidden></p>
+
+    <form id="loginForm" class="auth-form" novalidate>
+      <input id="email" type="email" maxlength="254" placeholder="Email" aria-label="Email" autocomplete="email"
+        required />
+      <input id="password" type="password" maxlength="72" placeholder="Password" aria-label="Password"
+        autocomplete="current-password" required />
+      <button id="forgotBtn" class="link auth-forgot" type="button">Forgot password?</button>
+      <button id="submitBtn" class="btn btn-block" type="submit">Log in</button>
+    </form>
+    <p id="switchLink" class="auth-switch">New here? <a href="signup.html">Create an account</a></p>
+
+    <div id="signedIn" class="auth-panel" hidden>
+      <p>You're logged in as <strong id="signedInAs"></strong>.</p>
+      <div class="auth-actions">
+        <a class="btn btn-outline" href="index.html">Continue shopping</a>
+        <button id="logoutBtn" class="btn btn-outline" type="button">Log out</button>
+      </div>
+    </div>
+
+    <section id="ordersSection" class="orders" hidden>
+      <h2>Your orders</h2>
+      <div id="orders" class="order-list"></div>
+      <p id="noOrders" class="muted" hidden>No orders yet. Items you check out from your cart will appear here.</p>
+    </section>
+    <p id="setupNotice" class="auth-notice" hidden>Accounts aren't connected yet. Add your Supabase project URL and anon
+      key to <code>public/js/supabase-config.js</code>, then reload this page.</p>
+    <p id="status" class="status" role="status" hidden></p>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">© PokeEngrave</div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/supabase-client.js"></script>
+  <script src="js/catalog.js"></script>
+  <script src="js/binder.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/auth.js"></script>
+</body>
+
+</html>

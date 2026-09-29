@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sign up · PokeEngrave</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="index.html">PokeEngrave</a>
+      <nav class="nav">
+        <a href="index.html">Home</a>
+        <a href="custom.html">Custom Designs</a>
+        <a href="contact.html">Contact</a>
+        <a href="cart.html">Cart (<span data-cart-count>0</span>)</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container auth">
+    <div class="intro">
+      <h1>Create an account</h1>
+      <p>Sign up to keep track of your orders and custom designs.</p>
+    </div>
+
+    <p id="reasonNotice" class="auth-reason" role="status" hidden></p>
+
+    <form id="signupForm" class="auth-form" novalidate>
+      <input id="name" maxlength="80" placeholder="Name" aria-label="Name" autocomplete="name" required />
+      <input id="email" type="email" maxlength="254" placeholder="Email" aria-label="Email" autocomplete="email" required />
+      <input id="password" type="password" maxlength="72" placeholder="Password (at least 8 characters)" aria-label="Password" autocomplete="new-password" required />
+      <input id="confirmPassword" type="password" maxlength="72" placeholder="Confirm password" aria-label="Confirm password" autocomplete="new-password" required />
+      <button id="submitBtn" class="btn btn-block" type="submit">Create account</button>
+    </form>
+    <p id="switchLink" class="auth-switch">Already have an account? <a href="login.html">Log in</a></p>
+
+    <div id="checkEmail" class="auth-panel" hidden>
+      <p><strong>Check your email.</strong> We've sent a confirmation link to <strong id="checkEmailAddress"></strong>. Click it to finish creating your account, then log in.</p>
+      <div class="auth-actions"><a class="btn" href="login.html">Go to log in</a></div>
+    </div>
+    <p id="setupNotice" class="auth-notice" hidden>Accounts aren't connected yet. Add your Supabase project URL and anon key to <code>public/js/supabase-config.js</code>, then reload this page.</p>
+    <p id="status" class="status" role="status" hidden></p>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">© PokeEngrave</div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/supabase-client.js"></script>
+  <script src="js/catalog.js"></script>
+  <script src="js/binder.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/auth.js"></script>
+</body>
+
+</html>

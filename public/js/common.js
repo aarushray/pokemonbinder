@@ -40,6 +40,44 @@ const Shop = (() => {
     writeCart(items);
   }
 
+  function clearCart() {
+    writeCart([]);
+  }
+
+  // Carts belong to whoever is logged in on this browser. Logging out sets the cart aside for that
+  // account (so the next person starts empty); logging back in brings it back, merged with
+  // anything added while logged out.
+  const savedCartKey = (userId) => `${CART_KEY}:${userId}`;
+
+  function stashCart(userId) {
+    try {
+      const items = readCart();
+      if (items.length) localStorage.setItem(savedCartKey(userId), JSON.stringify(items));
+      else localStorage.removeItem(savedCartKey(userId));
+    } catch {
+      // Storage blocked: nothing to set aside.
+    }
+    writeCart([]);
+  }
+
+  function restoreCart(userId) {
+    let saved = [];
+    try {
+      saved = JSON.parse(localStorage.getItem(savedCartKey(userId))) || [];
+      localStorage.removeItem(savedCartKey(userId));
+    } catch {
+      return;
+    }
+    if (!Array.isArray(saved) || !saved.length) return;
+    const items = readCart();
+    for (const s of saved) {
+      const line = items.find((i) => i.id === s.id && i.color === s.color);
+      if (line) line.qty = Math.min(20, line.qty + s.qty);
+      else items.push(s);
+    }
+    writeCart(items);
+  }
+
   function cartCount() {
     return readCart().reduce((n, i) => n + i.qty, 0);
   }
@@ -189,7 +227,15 @@ const Shop = (() => {
     search.setAttribute('aria-label', 'Search designs');
     search.setAttribute('aria-expanded', 'false');
     search.innerHTML = ICONS.search;
-    right.append(currency, search);
+    // Account: goes to the log in page (which shows who's logged in, with a Log out button).
+    const account = document.createElement('a');
+    account.href = 'login.html';
+    account.className = 'icon-btn';
+    account.setAttribute('aria-label', 'Account');
+    account.title = 'Log in or sign up';
+    account.innerHTML = ICONS.account;
+    if (/\/(login|signup|reset-password)\.html$/.test(location.pathname)) account.setAttribute('aria-current', 'page');
+    right.append(currency, search, account);
     if (cart) {
       cart.className = 'icon-btn header-cart';
       cart.innerHTML = `${ICONS.bag}<span class="cart-badge" data-cart-count hidden>0</span>`;
@@ -199,6 +245,7 @@ const Shop = (() => {
   }
 
   const ICONS = {
+    account: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-3.5 4.5-5 8-5s6.5 1.5 8 5"/></svg>',
     search: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
     bag: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>',
   };
@@ -320,7 +367,7 @@ const Shop = (() => {
   pageSwitcher();
 
   return {
-    readCart, addToCart, setQty, pruneCart, loadDesigns, loadImage, money, thumbUrl, swatches, designType,
+    readCart, addToCart, setQty, clearCart, stashCart, restoreCart, pruneCart, loadDesigns, loadImage, money, thumbUrl, swatches, designType,
     loadCatalog, normTag, pageOf, currentPage, setPage,
   };
 })();

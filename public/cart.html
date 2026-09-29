@@ -26,6 +26,15 @@
 
     <p id="empty" class="empty" hidden>Your cart is empty. <a href="index.html">Browse designs</a></p>
 
+    <div id="orderPlaced" class="auth-panel order-placed" hidden>
+      <p><strong>Thank you! Your order has been placed.</strong></p>
+      <p>Order number <strong id="orderNumber"></strong>. We'll be in touch to arrange payment and delivery.</p>
+      <div class="auth-actions">
+        <a class="btn btn-outline" href="login.html">View your orders</a>
+        <a class="btn btn-outline" href="index.html">Continue shopping</a>
+      </div>
+    </div>
+
     <div id="cart" class="cart" hidden>
       <div id="lines" class="cart-lines"></div>
       <aside class="summary">
@@ -33,7 +42,7 @@
         <div class="summary-row"><span>Shipping</span><span class="muted">Calculated at checkout</span></div>
         <div class="summary-row total"><span>Subtotal</span><span id="subtotal"></span></div>
         <button id="checkout" class="btn btn-block" type="button">Checkout</button>
-        <p id="checkoutNote" class="note" hidden>Online checkout isn't connected yet.</p>
+        <p id="checkoutNote" class="note" hidden></p>
       </aside>
     </div>
   </main>
@@ -42,6 +51,9 @@
     <div class="container">© PokeEngrave</div>
   </footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/supabase-client.js"></script>
   <script src="js/catalog.js"></script>
   <script src="js/binder.js"></script>
   <script src="js/common.js"></script>

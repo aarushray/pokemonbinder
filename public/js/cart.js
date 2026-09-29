@@ -82,8 +82,58 @@
     document.getElementById('subtotal').textContent = Shop.money(total);
   }
 
-  document.getElementById('checkout').addEventListener('click', () => {
-    document.getElementById('checkoutNote').hidden = false;
+  // Checkout saves the order to Supabase for the logged-in customer (payment is arranged separately).
+  const checkoutBtn = document.getElementById('checkout');
+  const note = document.getElementById('checkoutNote');
+  const showNote = (text) => {
+    note.textContent = text;
+    note.hidden = !text;
+  };
+
+  checkoutBtn.addEventListener('click', async () => {
+    const items = Shop.readCart().filter((i) => byId.has(i.id));
+    if (!items.length) return;
+    if (!Account.configured) return showNote("Online checkout isn't connected yet.");
+    if (!(await Account.currentUser())) {
+      location.href = 'login.html?next=cart.html&reason=checkout';
+      return;
+    }
+
+    const lines = items.map((i) => {
+      const d = byId.get(i.id);
+      return {
+        design_id: d.id,
+        name: d.name,
+        binder_type: Shop.designType(d).name,
+        color: i.color,
+        color_name: Binder.colorName(i.color),
+        unit_price: d.price,
+        qty: i.qty,
+      };
+    });
+    const subtotal = Math.round(lines.reduce((sum, l) => sum + l.unit_price * l.qty, 0) * 100) / 100;
+    const itemCount = lines.reduce((n, l) => n + l.qty, 0);
+
+    checkoutBtn.disabled = true;
+    checkoutBtn.textContent = 'Placing order…';
+    showNote('');
+    const { data, error } = await Account.client
+      .from('orders')
+      .insert({ items: lines, item_count: itemCount, subtotal })
+      .select('id')
+      .single();
+    checkoutBtn.disabled = false;
+    checkoutBtn.textContent = 'Checkout';
+    if (error) {
+      const missing = error.code === 'PGRST205' || error.code === '42P01';
+      return showNote(missing ? "Orders aren't set up yet. Please try again later." : `Couldn't place your order: ${error.message}`);
+    }
+
+    Shop.clearCart();
+    render();
+    document.getElementById('empty').hidden = true;
+    document.getElementById('orderNumber').textContent = Account.orderNumber(data.id);
+    document.getElementById('orderPlaced').hidden = false;
   });
 
   render();
