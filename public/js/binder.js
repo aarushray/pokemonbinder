@@ -289,7 +289,10 @@
   }
 
   // Draws the binder (with shadow, on a transparent background) into `canvas`, resizing it.
-  function render(canvas, { image = null, color = COLORS[0].id, type = DEFAULT_TYPE, fit = 'cover', invert = false, scale: frameScale = 1 } = {}) {
+  // `back: true` draws the back cover: the same binder mirrored left to right (spine on the right),
+  // with no design.
+  function render(canvas, { image = null, color = COLORS[0].id, type = DEFAULT_TYPE, fit = 'cover', invert = false, scale: frameScale = 1, back = false } = {}) {
+    if (back) image = null;
     const t = getType(type);
     // Binders with a `display` factor are drawn smaller, centred in a picture sized like the 9-pocket's.
     const scale = frameScale * (t.shape.display || 1);
@@ -321,6 +324,7 @@
       y0 = Math.round((canvas.height - bh) / 2);
     }
     const ctx = canvas.getContext('2d');
+    if (back) ctx.setTransform(-1, 0, 0, 1, canvas.width, 0); // mirror (resizing the canvas above reset any earlier transform)
 
     const path = () => {
       ctx.beginPath();

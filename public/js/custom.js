@@ -17,8 +17,10 @@ function scheduleRender() {
   requestAnimationFrame(() => {
     pending = false;
     Binder.render(canvas, state);
+    if (state.color) slides.setBinder(state.type, state.color);
   });
 }
+const slides = Shop.coverSlides(canvas);
 
 const colorName = document.getElementById('colorName');
 function setColor(hex) {

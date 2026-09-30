@@ -33,8 +33,12 @@
   let color = colors.some((c) => c.id === requested) ? requested : design.color;
   let art = null;
 
+  const slides = Shop.coverSlides(canvas);
+  slides.setBinder(type.id, color);
+
   function draw() {
     colorName.textContent = Binder.colorName(color);
+    slides.setBinder(type.id, color);
     Binder.render(canvas, { image: art, color, type: type.id });
   }
 
@@ -77,7 +81,10 @@
       showPrice();
       showSwatches();
       if (art) draw();
-      else colorName.textContent = Binder.colorName(color);
+      else {
+        colorName.textContent = Binder.colorName(color);
+        slides.setBinder(type.id, color);
+      }
     });
   }
 
@@ -103,6 +110,7 @@
     color = picker.value;
     wheel.style.setProperty('--pick', color);
     colorName.textContent = Binder.colorName(color);
+    slides.setBinder(type.id, color);
     if (pending || !art) return;
     pending = true; // dragging in the picker fires many events; render at most once per frame
     requestAnimationFrame(() => {

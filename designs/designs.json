@@ -29,7 +29,8 @@
       "createdAt": "2026-09-25T00:20:27.026Z",
       "updatedAt": "2026-09-29T13:08:38.388Z",
       "page": "dragon-ball",
-      "subclasses": []
+      "subclasses": [],
+      "discount": 0
     },
     {
       "id": "luffy-b3309f",
@@ -45,7 +46,8 @@
       "subclasses": [
         "Luffy"
       ],
-      "updatedAt": "2026-09-29T13:08:38.809Z"
+      "updatedAt": "2026-09-29T13:08:38.809Z",
+      "discount": 0
     },
     {
       "id": "charizard-pikachu-0af22a",
@@ -62,7 +64,8 @@
         "Pikachu",
         "Charizard"
       ],
-      "updatedAt": "2026-09-29T13:08:39.121Z"
+      "updatedAt": "2026-09-29T13:08:39.121Z",
+      "discount": 0
     },
     {
       "id": "greninja-30th-anniversary-e53a94",
@@ -78,7 +81,8 @@
       "subclasses": [
         "30th Anniversary"
       ],
-      "updatedAt": "2026-09-29T13:08:39.465Z"
+      "updatedAt": "2026-09-29T13:08:39.465Z",
+      "discount": 0
     },
     {
       "id": "sylveon-image-867699",
@@ -95,7 +99,8 @@
       "subclasses": [
         "30th Anniversary",
         "Sylveon"
-      ]
+      ],
+      "discount": 0
     },
     {
       "id": "mew-e20fef",
@@ -111,7 +116,8 @@
       "page": "pokemon",
       "subclasses": [
         "30th Anniversary"
-      ]
+      ],
+      "discount": 0
     },
     {
       "id": "lucario-abeaee",
@@ -127,7 +133,8 @@
       "page": "pokemon",
       "subclasses": [
         "Lucario"
-      ]
+      ],
+      "discount": 0
     }
   ],
   "collections": [
@@ -140,7 +147,11 @@
         "Charizard",
         "Lucario",
         "Gengar",
-        "Sylveon"
+        "Sylveon",
+        "Mew",
+        "Mewtwo",
+        "Umbreon",
+        "Rayquaza"
       ]
     },
     {
@@ -149,16 +160,22 @@
       "subclasses": [
         "Luffy",
         "Zoro",
-        "Ace"
+        "Ace",
+        "Nami",
+        "Chopper",
+        "Sanji"
       ]
     },
     {
       "id": "dragon-ball",
       "name": "Dragon Ball",
-      "subclasses": []
+      "subclasses": [
+        "Goku",
+        "Vegeta"
+      ]
     }
   ],
   "settings": {
-    "storeDiscount": 20
+    "storeDiscount": 10
   }
 }

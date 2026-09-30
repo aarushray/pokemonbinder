@@ -425,6 +425,85 @@ const Shop = (() => {
   }
 
   // Drops cart lines whose design has since been deleted from the shop.
+  // Two slides for a binder preview: the front cover (the page's own canvas, with the design) and
+  // the back cover (the same binder mirrored, no design), switched with arrows, the dots or a swipe.
+  // Call setBinder(type, color) whenever the binder changes so the back cover matches.
+  const CHEVRON = (d) => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`;
+
+  function coverSlides(front) {
+    const stage = front.parentElement;
+    stage.classList.add('cover-slides');
+    front.setAttribute('aria-label', 'Front cover');
+    const back = document.createElement('canvas');
+    back.setAttribute('aria-label', 'Back cover');
+    back.hidden = true;
+    front.after(back);
+
+    const arrow = (cls, label, path, to) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `slide-arrow ${cls}`;
+      b.setAttribute('aria-label', label);
+      b.innerHTML = CHEVRON(path);
+      b.addEventListener('click', () => show(to));
+      stage.appendChild(b);
+      return b;
+    };
+    const prev = arrow('slide-prev', 'Show front cover', 'm15 18-6-6 6-6', 0);
+    const next = arrow('slide-next', 'Show back cover', 'm9 18 6-6-6-6', 1);
+
+    const dots = document.createElement('div');
+    dots.className = 'slide-dots';
+    const dotEls = ['Front cover', 'Back cover'].map((label, i) => {
+      const d = document.createElement('button');
+      d.type = 'button';
+      d.setAttribute('aria-label', label);
+      d.addEventListener('click', () => show(i));
+      dots.appendChild(d);
+      return d;
+    });
+    stage.appendChild(dots);
+
+    let index = 0;
+    let binder = null;
+    let backDrawn = false;
+    function drawBack() {
+      if (!binder || backDrawn) return;
+      Binder.render(back, { type: binder.type, color: binder.color, back: true });
+      backDrawn = true;
+    }
+    function show(i) {
+      index = i;
+      if (i === 1) drawBack();
+      front.hidden = i !== 0;
+      back.hidden = i !== 1;
+      prev.hidden = i === 0;
+      next.hidden = i === 1;
+      dotEls.forEach((d, j) => d.setAttribute('aria-current', String(j === i)));
+    }
+
+    // Swipe left/right on touch screens.
+    let startX = null;
+    stage.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; }, { passive: true });
+    stage.addEventListener('touchend', (e) => {
+      if (startX === null) return;
+      const dx = e.changedTouches[0].clientX - startX;
+      startX = null;
+      if (Math.abs(dx) > 40) show(dx < 0 ? 1 : 0);
+    });
+
+    show(0);
+    return {
+      show,
+      setBinder(type, color) {
+        if (binder && binder.type === type && binder.color === color) return;
+        binder = { type, color };
+        backDrawn = false;
+        if (index === 1) drawBack();
+      },
+    };
+  }
+
   function pruneCart(validIds) {
     const items = readCart();
     const kept = items.filter((i) => isCustom(i) || validIds.has(i.id));
@@ -436,7 +515,7 @@ const Shop = (() => {
   pageSwitcher();
 
   return {
-    isCustom, customPrice, addCustomToCart, customArtIds, priceFor, discountFor, sale, renderPrice, readCart, addToCart, setQty, clearCart, stashCart, restoreCart, pruneCart, loadDesigns, loadImage, money, thumbUrl, swatches, designType,
+    coverSlides, isCustom, customPrice, addCustomToCart, customArtIds, priceFor, discountFor, sale, renderPrice, readCart, addToCart, setQty, clearCart, stashCart, restoreCart, pruneCart, loadDesigns, loadImage, money, thumbUrl, swatches, designType,
     loadCatalog, normTag, pageOf, currentPage, setPage,
   };
 })();
