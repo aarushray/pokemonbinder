@@ -44,9 +44,16 @@
     return (f && f.extraPrice) || 0;
   }
 
-  // Texture name for dropdowns, with its surcharge, e.g. "Velvet texture (+5)".
-  function finishLabel(f) {
-    return f.extraPrice ? `${f.name} (+${f.extraPrice})` : f.name;
+  // How many pockets a custom design on this binder and texture holds (velvet 9-slots: 540).
+  function capacity(typeId, finishId) {
+    const f = (finishes(typeId) || []).find((f) => f.id === finishId);
+    return (f && f.cards) || getType(typeId).capacity;
+  }
+
+  // Texture name for dropdowns with its surcharge, e.g. "Velvet texture (+$5)". With a pocket count:
+  // "Velvet texture — 540 pockets (+$5)".
+  function finishLabel(f, pockets) {
+    return `${f.name}${pockets ? ` — ${pockets} pockets` : ''}${f.extraPrice ? ` (+$${f.extraPrice})` : ''}`;
   }
 
   // A colour value is a COLORS id, or any hex code (custom colours from the colour wheel).
@@ -331,10 +338,11 @@
       ctx.roundRect(x0, y0, bw, bh, radii);
     };
     const inset = 13 * scale;
-    // The left line of stitching runs along the spine fold, where the engraving starts.
+    // The stitching sits the same distance in from the spine fold as it does from the other edges;
+    // the engraving is clipped to it.
     const stitchPath = () => {
       ctx.beginPath();
-      ctx.roundRect(x0 + spineW, y0 + inset, bw - spineW - inset, bh - inset * 2,
+      ctx.roundRect(x0 + spineW + inset, y0 + inset, bw - spineW - inset * 2, bh - inset * 2,
         radii.map((r) => Math.max(4 * scale, r - inset)));
     };
 
@@ -413,5 +421,5 @@
     ctx.stroke();
   }
 
-  window.Binder = { COLORS, TYPES, DEFAULT_TYPE, getType, typeColors, finishes, finishColors, finishOf, finishExtra, finishLabel, render, colorName, colorHex };
+  window.Binder = { COLORS, TYPES, DEFAULT_TYPE, getType, typeColors, finishes, finishColors, finishOf, finishExtra, finishLabel, capacity, render, colorName, colorHex };
 })();

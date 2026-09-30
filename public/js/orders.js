@@ -8,7 +8,7 @@
   const keyInput = document.getElementById('adminKey');
 
   const STATUS = {
-    pending: 'Awaiting payment', paid: 'Paid', in_production: 'Being engraved',
+    pending: 'Awaiting payment', payment_submitted: 'Payment submitted', paid: 'Paid', in_production: 'Being engraved',
     shipped: 'Shipped', completed: 'Completed', cancelled: 'Cancelled',
   };
   for (const [id, label] of Object.entries(STATUS)) filterEl.add(new Option(label, id));
@@ -153,7 +153,32 @@
     const total = o.total != null ? o.total : o.subtotal;
     totals.textContent = `Subtotal ${Shop.money(o.subtotal)} · Shipping ${Shop.money(o.shipping_fee || 0)} · Total ${o.currency} ${Shop.money(total)}`;
 
+    // Proof of payment uploaded by the customer: check it, then set the status to Paid.
+    let proofRow = null;
+    if (o.payment_proof_path) {
+      const row = document.createElement('div');
+      proofRow = row;
+      row.className = 'admin-order-proof';
+      const when = o.payment_submitted_at && new Date(o.payment_submitted_at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+      row.append(text('span', `Payment proof uploaded${when ? ` on ${when}` : ''}`, 'muted'));
+      const btn = text('button', 'View payment proof', 'btn btn-outline btn-sm');
+      btn.type = 'button';
+      btn.addEventListener('click', async () => {
+        const win = window.open('', '_blank'); // opened now so the browser doesn't block it
+        try {
+          const { url } = await adminFetch(`/api/orders/${o.id}/proof`);
+          if (win) win.location = url;
+          else location.href = url;
+        } catch (err) {
+          if (win) win.close();
+          showStatus(err.message);
+        }
+      });
+      row.append(btn);
+    }
+
     el.append(head, who, items, totals);
+    if (proofRow) el.append(proofRow);
     return el;
   }
 

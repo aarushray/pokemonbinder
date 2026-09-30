@@ -24,6 +24,7 @@
 
   // ratio: artwork width:height (the engraved cover has exactly this shape).
   // basePrice: starting price of a custom design on this binder, shown on the Custom Designs page.
+  // capacity: how many pockets a custom design on this binder holds (a texture's `cards` overrides it).
   // colors: colour ids from COLORS this type is sold in (first one is the default).
   // finishes (optional): texture choices shown as a dropdown, each limited to some of the colours.
   // A finish with `cards` always holds that many cards, overriding the design's own capacity.
@@ -32,19 +33,19 @@
   // height from the art ratio; the art is then cropped top and bottom to fit. `display` (optional)
   // draws the binder that much smaller than the 9-pocket, centred in a 9-pocket-sized picture.
   const TYPES = [
-    { id: '4-pocket', name: '4-pocket', pockets: 4, basePrice: 60, ratio: [2, 3], colors: DIAMOND,
+    { id: '4-pocket', name: '4-slots', pockets: 4, capacity: 160, basePrice: 60, ratio: [2, 3], colors: DIAMOND,
       shape: { spine: 44, radius: 80, tab: false, display: 0.68 } },
-    { id: '4-pocket-toploader', name: '4-pocket toploader', pockets: 4, basePrice: 80, ratio: [2, 3], colors: DIAMOND,
+    { id: '4-pocket-toploader', name: '4-slots toploader', pockets: 4, capacity: 112, basePrice: 80, ratio: [2, 3], colors: DIAMOND,
       shape: { spine: 50, radius: 80, tab: false, display: 0.88 } },
-    { id: '9-pocket', name: '9-pocket', pockets: 9, basePrice: 80, ratio: [2, 3], colors: [...DIAMOND, ...VELVET],
+    { id: '9-pocket', name: '9-slots', pockets: 9, capacity: 360, basePrice: 80, ratio: [2, 3], colors: [...DIAMOND, ...VELVET],
       finishes: [
         { id: 'diamond', name: 'Diamond texture', colors: DIAMOND },
         { id: 'velvet', name: 'Velvet texture', colors: VELVET, cards: 540, extraPrice: 5 },
       ],
       shape: { spine: 36, radius: 72, tab: false } },
-    { id: '9-pocket-toploader', name: '9-pocket toploader', pockets: 9, basePrice: 100, ratio: [4, 5], colors: DIAMOND,
+    { id: '9-pocket-toploader', name: '9-slots toploader', pockets: 9, capacity: 252, basePrice: 100, ratio: [4, 5], colors: DIAMOND,
       shape: { spine: 60, radius: 72, tab: false } },
-    { id: '12-pocket', name: '12-pocket', pockets: 12, basePrice: 90, ratio: [4, 5], colors: DIAMOND,
+    { id: '12-pocket', name: '12-slots', pockets: 12, capacity: 480, basePrice: 90, ratio: [4, 5], colors: DIAMOND,
       shape: { spine: 75, radius: 60, tab: false } },
   ];
   const DEFAULT_TYPE = '9-pocket';

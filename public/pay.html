@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Payment · TCGEngrave</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="logo" href="index.html">TCGEngrave</a>
+      <nav class="nav">
+        <a href="index.html">Home</a>
+        <a href="custom.html">Custom Designs</a>
+        <a href="contact.html">Contact</a>
+        <a href="cart.html">Cart (<span data-cart-count>0</span>)</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container pay">
+    <div class="intro">
+      <h1 id="payTitle">Pay with PayNow</h1>
+      <p>Order <strong id="orderNumber"></strong></p>
+    </div>
+
+    <div id="paying" class="pay-layout" hidden>
+      <section class="pay-qr">
+        <img src="images/paynow-qr.jpg" alt="TCGEngrave PayNow QR code" width="726" height="726" />
+      </section>
+
+      <section class="pay-steps">
+        <div class="pay-amount">
+          <span class="muted">Amount to pay</span>
+          <strong id="amount"></strong>
+        </div>
+        <ol>
+          <li>Scan the QR code with your banking app (or save it and open it in your app).</li>
+          <li>Pay exactly <strong data-amount></strong>. Put <strong data-order-number></strong> in the payment reference or comments.</li>
+          <li>Take a screenshot of the completed payment and upload it below.</li>
+        </ol>
+
+        <form id="proofForm" class="proof-form" novalidate>
+          <label id="proofDrop" class="dropzone proof-drop" for="proofFile">
+            <input id="proofFile" type="file" accept="image/*" hidden />
+            <span class="dz-main">Upload proof of payment</span>
+            <span class="dz-hint">A screenshot of the completed transfer (PNG or JPG, up to 10 MB)</span>
+          </label>
+          <img id="proofPreview" class="proof-preview" alt="Your payment screenshot" hidden />
+          <button id="submitProof" class="btn btn-block" type="submit" disabled>Submit payment</button>
+        </form>
+      </section>
+    </div>
+
+    <div id="placed" class="auth-panel order-placed" hidden>
+      <p><strong>Thank you! Your order has been placed.</strong></p>
+      <p>Order number <strong data-order-number></strong>. We'll check your payment and be in touch about delivery.</p>
+      <div class="auth-actions">
+        <a class="btn btn-outline" href="login.html">View your orders</a>
+        <a class="btn btn-outline" href="index.html">Continue shopping</a>
+      </div>
+    </div>
+
+    <p id="payStatus" class="status" role="status" hidden></p>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">© TCGEngrave</div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/supabase-client.js"></script>
+  <script src="js/catalog.js"></script>
+  <script src="js/binder.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/pay.js"></script>
+</body>
+
+</html>

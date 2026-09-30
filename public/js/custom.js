@@ -44,9 +44,11 @@ function setType(id) {
   const list = Binder.finishes(id);
   finishField.hidden = !list;
   // Every other binder only comes in the diamond texture, shown as a fixed label.
+  // Both show how many pockets the binder holds in that texture.
   document.getElementById('finishFixed').hidden = !!list;
+  document.querySelector('#finishFixed .fixed-value').textContent = `Diamond texture — ${Binder.capacity(id)} pockets`;
   state.finish = list ? Binder.finishOf(id, state.color) : null;
-  if (list) finishSelect.replaceChildren(...list.map((f) => new Option(Binder.finishLabel(f), f.id, false, f.id === state.finish)));
+  if (list) finishSelect.replaceChildren(...list.map((f) => new Option(Binder.finishLabel(f, Binder.capacity(id, f.id)), f.id, false, f.id === state.finish)));
   showPrices();
   showImageInfo();
   showColors();

@@ -74,7 +74,7 @@ create table if not exists public.orders (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null default auth.uid() references auth.users (id) on delete cascade,
   status      text not null default 'pending'
-              check (status in ('pending', 'paid', 'in_production', 'shipped', 'completed', 'cancelled')),
+              check (status in ('pending', 'payment_submitted', 'paid', 'in_production', 'shipped', 'completed', 'cancelled')),
   -- [{ design_id, name, binder_type, color, color_name, unit_price, qty }]
   items       jsonb not null check (jsonb_typeof(items) = 'array' and jsonb_array_length(items) > 0),
   item_count  integer not null check (item_count > 0),
@@ -97,15 +97,14 @@ create policy "Orders: read own" on public.orders
 -- own rows). Visitors who aren't logged in get no access at all.
 revoke all on public.profiles, public.orders from anon;
 grant select, update on public.profiles to authenticated;
-grant select, insert on public.orders to authenticated;
+grant select on public.orders to authenticated;
+revoke insert on public.orders from authenticated;
 -- The server's admin Orders page uses the service_role key, which also needs explicit access here.
 grant select, insert, update, delete on public.profiles, public.orders to service_role;
 
--- Customers can place orders for themselves, always starting as 'pending'.
--- They can't edit or delete orders; status changes are made by you in the dashboard.
+-- Customers can't create, edit or delete orders directly. The site's server places orders (it works
+-- out every price itself, so prices can't be altered in the browser); status changes are made by you.
 drop policy if exists "Orders: place own" on public.orders;
-create policy "Orders: place own" on public.orders
-  for insert to authenticated with check (user_id = auth.uid() and status = 'pending');
 
 -- ─── Custom design artwork (Storage) ────────────────────────────────────────────────────
 -- Customers' own artwork for custom-design orders, uploaded at checkout to
@@ -146,3 +145,31 @@ alter table public.orders
   add column if not exists postal_code    text,
   add column if not exists shipping_fee   numeric(10, 2) not null default 0 check (shipping_fee >= 0),
   add column if not exists total          numeric(10, 2) check (total >= 0);
+
+-- ─── PayNow payment proof ───────────────────────────────────────────────────────────────
+-- After checkout, customers pay by scanning the shop's PayNow QR code and upload a screenshot of the
+-- payment. The order then moves to 'payment_submitted' until you check it and set it to 'paid'.
+alter table public.orders drop constraint if exists orders_status_check;
+alter table public.orders add constraint orders_status_check
+  check (status in ('pending', 'payment_submitted', 'paid', 'in_production', 'shipped', 'completed', 'cancelled'));
+
+alter table public.orders
+  add column if not exists payment_proof_path   text,
+  add column if not exists payment_submitted_at timestamptz;
+
+-- Screenshots are stored privately at payment-proofs/<customer id>/<file>. Only you (Storage →
+-- payment-proofs, or the admin Orders page) and the customer who uploaded one can see it.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('payment-proofs', 'payment-proofs', false, 10485760, array['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif'])
+on conflict (id) do update
+  set public = false, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Payment proofs: upload own" on storage.objects;
+create policy "Payment proofs: upload own" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'payment-proofs' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "Payment proofs: read own" on storage.objects;
+create policy "Payment proofs: read own" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'payment-proofs' and (storage.foldername(name))[1] = auth.uid()::text);

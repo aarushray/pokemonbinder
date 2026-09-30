@@ -244,60 +244,34 @@
       checkoutBtn.textContent = 'Checkout';
     };
 
+    // Custom artwork is uploaded first. Then only what's in the cart goes to the server, which works
+    // out every price itself and saves the order (so prices can't be altered in the browser).
     const d = readDetails();
-    let lines;
+    let result;
     try {
       pendingOrderId = pendingOrderId || crypto.randomUUID();
-      lines = await Promise.all(items.map(async (i, index) => {
-        const { name, type, unit } = describe(i);
-        const line = {
-          name,
-          binder_type: type.name,
-          color: i.color,
-          color_name: Binder.colorName(i.color),
-          unit_price: unit.price,
-          original_price: unit.original,
-          discount_percent: unit.discount,
-          qty: i.qty,
-        };
-        if (Shop.isCustom(i)) {
-          const finish = (Binder.finishes(type.id) || []).find((f) => f.id === Binder.finishOf(type.id, i.color));
-          return { ...line, custom: true, texture: finish ? finish.name : 'Diamond texture', art_path: await uploadArt(user, i, pendingOrderId, d.name, index) };
-        }
-        return { design_id: i.id, ...line };
-      }));
+      const lines = await Promise.all(items.map(async (i, index) => (Shop.isCustom(i)
+        ? { custom: true, type: i.type, color: i.color, qty: i.qty, art_path: await uploadArt(user, i, pendingOrderId, d.name, index) }
+        : { id: i.id, color: i.color, qty: i.qty })));
+      const { data: { session } } = await Account.client.auth.getSession();
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session && session.access_token}` },
+        body: JSON.stringify({ orderId: pendingOrderId, items: lines, details: d }),
+      }).catch(() => null);
+      if (!res) throw new Error("Couldn't reach the shop. Please check your connection and try again.");
+      result = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        location.href = 'login.html?next=cart.html&reason=checkout';
+        return;
+      }
+      if (!res.ok) throw new Error(result.error || "Couldn't place your order. Please try again.");
     } catch (err) {
       done();
       return showNote(err.message);
     }
-    const subtotal = Math.round(lines.reduce((sum, l) => sum + l.unit_price * l.qty, 0) * 100) / 100;
-    const itemCount = lines.reduce((n, l) => n + l.qty, 0);
-
-    const contact = d.contactMethod === 'telegram' ? d.contact.replace(/^@/, '') : d.contact.toLowerCase();
-    const { data, error } = await Account.client
-      .from('orders')
-      .insert({
-        id: pendingOrderId,
-        items: lines,
-        item_count: itemCount,
-        subtotal,
-        shipping_fee: SHIPPING_FEE,
-        total: Math.round((subtotal + SHIPPING_FEE) * 100) / 100,
-        contact_method: d.contactMethod,
-        contact,
-        customer_name: d.name,
-        phone: d.phone,
-        address: d.address,
-        unit_number: d.unit || null,
-        postal_code: d.postal,
-      })
-      .select('id')
-      .single();
     done();
-    if (error) {
-      const missing = ['PGRST205', '42P01', 'PGRST204', '42703'].includes(error.code);
-      return showNote(missing ? "Checkout isn't fully set up yet. Please try again later." : `Couldn't place your order: ${error.message}`);
-    }
+    const contact = d.contactMethod === 'telegram' ? d.contact.replace(/^@/, '') : d.contact.toLowerCase();
 
     // Remember the details on the customer's profile for next time.
     Account.client.from('profiles').update({
@@ -309,10 +283,8 @@
     pendingOrderId = null;
     Shop.clearCart();
     CustomArt.prune(Shop.customArtIds()).catch(() => {});
-    render();
-    document.getElementById('empty').hidden = true;
-    document.getElementById('orderNumber').textContent = Account.orderNumber(data.id);
-    document.getElementById('orderPlaced').hidden = false;
+    // Next: pay with PayNow and upload proof of payment.
+    location.href = `pay.html?order=${encodeURIComponent(result.orderId)}`;
   });
 
   render();

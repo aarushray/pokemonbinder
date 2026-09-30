@@ -91,7 +91,7 @@
     };
 
     const STATUS = {
-      pending: 'Awaiting payment', paid: 'Paid', in_production: 'Being engraved',
+      pending: 'Awaiting payment', payment_submitted: 'Payment submitted', paid: 'Paid', in_production: 'Being engraved',
       shipped: 'Shipped', completed: 'Completed', cancelled: 'Cancelled',
     };
 
@@ -132,6 +132,13 @@
         total.className = 'order-total';
         total.textContent = `${o.item_count} ${o.item_count === 1 ? 'item' : 'items'} · ${o.currency} ${Shop.money(o.total ?? o.subtotal)}${o.total != null ? ' incl. shipping' : ''}`;
         el.append(head, lines, total);
+        if (o.status === 'pending') {
+          const pay = document.createElement('a');
+          pay.className = 'btn btn-sm order-pay';
+          pay.href = `pay.html?order=${encodeURIComponent(o.id)}`;
+          pay.textContent = 'Pay now';
+          el.append(pay);
+        }
         return el;
       }));
     }

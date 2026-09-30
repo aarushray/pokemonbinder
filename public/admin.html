@@ -45,8 +45,10 @@
         <p class="note">Takes this percentage off every binder in the shop, on every page. Custom designs are never discounted. While it's on, binders' own discounts are reset to 0 and can't be edited. Set 0 to end the sale and allow binders' own discounts again.</p>
         <form id="storeDiscountForm" class="add-page discount-form">
           <label class="discount-input"><input id="storeDiscount" type="number" min="0" max="90" step="1" placeholder="0" aria-label="Storewide discount in percent" /><span>% off</span></label>
+          <input id="bannerText" class="banner-text-input" maxlength="160" placeholder="Banner text, e.g. Mid-Autumn sale: 20% off all binders!" aria-label="Sale banner text" />
           <button class="btn" type="submit">Save</button>
         </form>
+        <p class="note banner-note">While the discount is on, this text scrolls across a banner at the top of the home page. Leave it empty to show "<span id="bannerDefault">20% off all binders</span>".</p>
         <p id="storeDiscountStatus" class="status" hidden></p>
       </div>
     </section>

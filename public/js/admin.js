@@ -305,7 +305,7 @@
 
     const cardsField = document.createElement('label');
     cardsField.className = 'field';
-    cardsField.innerHTML = '<span>Cards held</span>';
+    cardsField.innerHTML = '<span>Pockets</span>';
     const cards = document.createElement('input');
     cards.type = 'number';
     cards.min = '1';
@@ -374,7 +374,7 @@
     if (blank) return setStatus('Every design needs a name.', true);
     const wholeNumber = (v, max) => Number.isInteger(Number(v)) && v >= 1 && v <= max;
     const badSize = queue.find((i) => i.cards === '' || !wholeNumber(i.cards, 10000));
-    if (badSize) return setStatus(`"${badSize.name}" needs how many cards it holds (a whole number from 1 to 10000).`, true);
+    if (badSize) return setStatus(`"${badSize.name}" needs how many pockets it has (a whole number from 1 to 10000).`, true);
     const okDiscount = (v) => v === '' || (Number.isInteger(Number(v)) && v >= 0 && v <= 90);
     const badDiscount = queue.find((i) => !okDiscount(i.discount));
     if (badDiscount) return setStatus(`"${badDiscount.name}" has an invalid discount (a whole number from 0 to 90, or leave it blank).`, true);
@@ -497,7 +497,7 @@
       title.textContent = d.name;
       const meta = document.createElement('span');
       meta.className = 'muted';
-      meta.textContent = `${Shop.designType(d).name} · ${Binder.colorName(d.color)} · ${d.cards ?? 540} cards · ${Shop.money(d.price)}`
+      meta.textContent = `${Shop.designType(d).name} · ${Binder.colorName(d.color)} · ${d.cards ?? 540} pockets · ${Shop.money(d.price)}`
         + (d.discount > 0 ? ` · ${d.discount}% off` : '');
       const onPage = !!Shop.pageOf(d, collections);
       const pages = document.createElement('span');
@@ -571,7 +571,7 @@
 
       const sizeRow = document.createElement('div');
       sizeRow.className = 'field-row';
-      sizeRow.append(field('Cards held', cards), field('Price', price));
+      sizeRow.append(field('Pockets', cards), field('Price', price));
 
       const error = document.createElement('p');
       error.className = 'status error';
@@ -666,9 +666,19 @@
     storeDiscountStatus.textContent = msg;
     storeDiscountStatus.classList.toggle('error', !!isError);
   };
+  // Sale banner text (shown on the home page while the storewide discount is on).
+  const bannerInput = document.getElementById('bannerText');
+  const showBannerDefault = () => {
+    const v = Number(storeDiscountInput.value) || 20;
+    document.getElementById('bannerDefault').textContent = Shop.defaultBanner(v);
+  };
+  storeDiscountInput.addEventListener('input', showBannerDefault);
+
   Shop.loadCatalog().then(({ settings }) => {
     storeDiscountInput.value = settings.storeDiscount || '';
+    bannerInput.value = settings.bannerText || '';
     setStoreDiscountOn(settings.storeDiscount > 0);
+    showBannerDefault();
   }).catch(() => {});
   document.getElementById('storeDiscountForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -678,7 +688,7 @@
       await adminFetch('/api/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storeDiscount: v }),
+        body: JSON.stringify({ storeDiscount: v, bannerText: bannerInput.value }),
       });
     } catch (err) {
       return showStoreStatus(err.message, true);
@@ -687,8 +697,8 @@
     await Shop.loadDesigns(true); // binders' own discounts were reset on the server
     loadPublished();
     showStoreStatus(v
-      ? `Storewide discount set to ${v}% off. Binders' own discounts have been reset to 0 and are locked until the storewide discount is back to 0.`
-      : 'Storewide discount removed. You can give binders their own discount again.');
+      ? `Storewide discount set to ${v}% off, and the home page banner is showing. Binders' own discounts have been reset to 0 and are locked until the storewide discount is back to 0.`
+      : 'Storewide discount removed, and the banner is hidden. You can give binders their own discount again.');
   });
 
   loadPages().then(loadPublished);

@@ -128,7 +128,8 @@ const Shop = (() => {
         if (!res.ok) throw new Error(`Could not load designs (${res.status})`);
         const db = await res.json();
         storeDiscount = Number(db.settings && db.settings.storeDiscount) || 0;
-        return { designs: db.designs || [], collections: db.collections || [], settings: { storeDiscount } };
+        const bannerText = (db.settings && db.settings.bannerText) || '';
+        return { designs: db.designs || [], collections: db.collections || [], settings: { storeDiscount, bannerText } };
       });
       catalogPromise.catch(() => { catalogPromise = null; });
     }
@@ -504,6 +505,36 @@ const Shop = (() => {
     };
   }
 
+  // Sale banner under the header: while a storewide discount is on, the admin's message (or a
+  // default one) glides across the screen. The text is repeated so the loop has no gap.
+  const defaultBanner = (percent) => `${percent}% off all binders`;
+
+  function saleBanner(settings) {
+    if (!(settings.storeDiscount > 0)) return;
+    const header = document.querySelector('.site-header');
+    if (!header || document.querySelector('.sale-banner')) return;
+    const message = settings.bannerText || defaultBanner(settings.storeDiscount);
+    const banner = document.createElement('div');
+    banner.className = 'sale-banner';
+    banner.setAttribute('role', 'note');
+    banner.setAttribute('aria-label', message);
+    const track = document.createElement('div');
+    track.className = 'sale-banner-track';
+    track.setAttribute('aria-hidden', 'true');
+    // Two identical halves: the animation moves the track by one half, then starts again.
+    for (let half = 0; half < 2; half++) {
+      for (let i = 0; i < 4; i++) {
+        const item = document.createElement('span');
+        item.textContent = message;
+        track.appendChild(item);
+      }
+    }
+    // Longer messages move at the same reading speed, so give them more time.
+    track.style.setProperty('--banner-duration', `${Math.max(18, message.length * 0.9)}s`);
+    banner.appendChild(track);
+    header.after(banner);
+  }
+
   function pruneCart(validIds) {
     const items = readCart();
     const kept = items.filter((i) => isCustom(i) || validIds.has(i.id));
@@ -515,7 +546,7 @@ const Shop = (() => {
   pageSwitcher();
 
   return {
-    coverSlides, isCustom, customPrice, addCustomToCart, customArtIds, priceFor, discountFor, sale, renderPrice, readCart, addToCart, setQty, clearCart, stashCart, restoreCart, pruneCart, loadDesigns, loadImage, money, thumbUrl, swatches, designType,
+    defaultBanner, saleBanner, coverSlides, isCustom, customPrice, addCustomToCart, customArtIds, priceFor, discountFor, sale, renderPrice, readCart, addToCart, setQty, clearCart, stashCart, restoreCart, pruneCart, loadDesigns, loadImage, money, thumbUrl, swatches, designType,
     loadCatalog, normTag, pageOf, currentPage, setPage,
   };
 })();

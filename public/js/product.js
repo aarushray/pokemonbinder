@@ -23,7 +23,7 @@
   const type = Shop.designType(design);
   const colors = Binder.typeColors(type.id);
   document.getElementById('typeName').textContent = `${type.name} binder`;
-  document.getElementById('pockets').textContent = `${type.pockets} pockets per page, side-loading`;
+  document.getElementById('pockets').textContent = `${type.pockets} slots per page, side-loading`;
   document.getElementById('product').hidden = false;
 
   const canvas = document.getElementById('canvas');
@@ -67,7 +67,7 @@
   showPrice();
   const showCards = () => {
     const fixed = (finishes || []).find((f) => f.id === finish)?.cards;
-    cardsEl.textContent = `Holds ${fixed ?? design.cards ?? 540} cards`;
+    cardsEl.textContent = `Holds ${fixed ?? design.cards ?? 540} pockets`;
   };
   showCards();
   document.getElementById('finishField').hidden = !finishes;

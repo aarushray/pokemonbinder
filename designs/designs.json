@@ -15,7 +15,7 @@
       "thumb": "designs/scream-psyduck-159c2e-thumb.webp",
       "createdAt": "2026-09-30T01:15:21.504Z",
       "discount": 0,
-      "updatedAt": "2026-09-30T01:35:04.321Z"
+      "updatedAt": "2026-09-30T13:58:42.669Z"
     },
     {
       "id": "dragon-ball-collector-9e7fcb",
@@ -27,7 +27,7 @@
       "art": "designs/dragon-ball-collector-9e7fcb-art.jpg",
       "thumb": "designs/dragon-ball-collector-9e7fcb-thumb.webp",
       "createdAt": "2026-09-25T00:20:27.026Z",
-      "updatedAt": "2026-09-29T13:08:38.388Z",
+      "updatedAt": "2026-09-30T13:58:42.836Z",
       "page": "dragon-ball",
       "subclasses": [],
       "discount": 0
@@ -46,7 +46,7 @@
       "subclasses": [
         "Luffy"
       ],
-      "updatedAt": "2026-09-29T13:08:38.809Z",
+      "updatedAt": "2026-09-30T13:58:43.300Z",
       "discount": 0
     },
     {
@@ -64,7 +64,7 @@
         "Pikachu",
         "Charizard"
       ],
-      "updatedAt": "2026-09-29T13:08:39.121Z",
+      "updatedAt": "2026-09-30T13:58:43.472Z",
       "discount": 0
     },
     {
@@ -81,7 +81,7 @@
       "subclasses": [
         "30th Anniversary"
       ],
-      "updatedAt": "2026-09-29T13:08:39.465Z",
+      "updatedAt": "2026-09-30T13:58:43.682Z",
       "discount": 0
     },
     {
@@ -94,7 +94,7 @@
       "art": "designs/sylveon-image-867699-art.jpg",
       "thumb": "designs/sylveon-image-867699-thumb.webp",
       "createdAt": "2026-09-24T13:43:53.899Z",
-      "updatedAt": "2026-09-29T13:08:39.763Z",
+      "updatedAt": "2026-09-30T13:58:43.898Z",
       "page": "pokemon",
       "subclasses": [
         "30th Anniversary",
@@ -112,7 +112,7 @@
       "art": "designs/mew-e20fef-art.jpg",
       "thumb": "designs/mew-e20fef-thumb.webp",
       "createdAt": "2026-09-24T13:43:27.683Z",
-      "updatedAt": "2026-09-29T13:08:40.156Z",
+      "updatedAt": "2026-09-30T13:58:44.108Z",
       "page": "pokemon",
       "subclasses": [
         "30th Anniversary"
@@ -129,7 +129,7 @@
       "thumb": "designs/lucario-abeaee-thumb.webp",
       "createdAt": "2026-09-24T12:26:44.545Z",
       "type": "9-pocket",
-      "updatedAt": "2026-09-29T13:08:40.424Z",
+      "updatedAt": "2026-09-30T13:58:44.338Z",
       "page": "pokemon",
       "subclasses": [
         "Lucario"
@@ -176,6 +176,7 @@
     }
   ],
   "settings": {
-    "storeDiscount": 10
+    "storeDiscount": 0,
+    "bannerText": "Christmas Sale: 20% off all binders"
   }
 }

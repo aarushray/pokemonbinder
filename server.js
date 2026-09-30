@@ -4,7 +4,7 @@
 // designs/ are served, so this file, package.json and .data/ never are.
 //
 // Data lives in designs/designs.json: { designs: [...], collections: [{ id, name, subclasses }],
-// settings: { storeDiscount } }. Discounts are whole percentages (0 = none).
+// settings: { storeDiscount, bannerText } }. Discounts are whole percentages (0 = none).
 // Collections are the shop's pages. Each design belongs to one page (`page`, a collection id) and
 // may be tagged with some of that page's subclasses (`subclasses`), which the shop uses as filters.
 //
@@ -13,6 +13,10 @@
 //
 // Customer orders live in Supabase. The admin Orders page reads them through this server using the
 // Supabase secret (service_role) key from the git-ignored .env file; that key never reaches a browser.
+//
+// Checkout: customers' orders are priced and saved here (POST /api/checkout), never by the browser,
+// so prices can't be altered. The order is stored in Supabase with the service_role key. Customers
+// then pay with the shop's PayNow QR code and upload proof (pay.html), which you check and mark paid.
 //
 // Admin actions (upload/edit/delete designs, add/remove pages, read messages, manage orders) are
 // allowed from this computer only, unless ADMIN_PASSWORD is set, in which case requests must send
@@ -42,7 +46,7 @@ const PORT = Number(process.env.PORT) || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const MAX_BODY = 40 * 1024 * 1024;
 
-const { TYPES: BINDER_TYPES } = require('./public/js/catalog.js');
+const { TYPES: BINDER_TYPES, COLORS: BINDER_COLORS } = require('./public/js/catalog.js');
 
 // Supabase project URL: from .env, or the one the website already uses (public/js/supabase-config.js).
 const SUPABASE_URL = (process.env.SUPABASE_URL || (() => {
@@ -83,6 +87,7 @@ function readDb() {
   for (const c of db.collections) if (!Array.isArray(c.subclasses)) c.subclasses = [];
   if (!db.settings || typeof db.settings !== 'object') db.settings = {};
   if (!Number.isInteger(db.settings.storeDiscount)) db.settings.storeDiscount = 0;
+  if (typeof db.settings.bannerText !== 'string') db.settings.bannerText = '';
   return db;
 }
 
@@ -173,7 +178,7 @@ function validateFields(body, db) {
   if (!type) return { error: 'Unknown binder type' };
   if (!type.colors.includes(body.color)) return { error: `That colour isn't available for the ${type.name}` };
   const cards = Number(body.cards);
-  if (!Number.isInteger(cards) || cards < 1 || cards > 10000) return { error: 'Card capacity must be a whole number from 1 to 10000' };
+  if (!Number.isInteger(cards) || cards < 1 || cards > 10000) return { error: 'Number of pockets must be a whole number from 1 to 10000' };
   const page = db.collections.find((c) => c.id === body.page);
   if (!page) return { error: 'Choose which page the design goes on' };
   // Keep only subclasses that exist on that page, spelled as the page spells them.
@@ -195,13 +200,15 @@ function parseDiscount(value) {
 }
 
 // Storewide discount for every shop design (custom designs are never discounted). Turning it on
-// resets every design's own discount to 0, so the two never stack.
+// resets every design's own discount to 0, so the two never stack. bannerText is the sale message
+// that scrolls across the top of the home page while the discount is on.
 async function updateSettings(req, res) {
   const body = JSON.parse(await readBody(req));
   const storeDiscount = parseDiscount(body.storeDiscount);
   if (storeDiscount === null) return sendJson(res, 400, { error: 'Storewide discount must be a whole number from 0 to 90 (percent)' });
   const db = readDb();
   db.settings.storeDiscount = storeDiscount;
+  if (body.bannerText !== undefined) db.settings.bannerText = String(body.bannerText).replace(/\s+/g, ' ').trim().slice(0, 160);
   if (storeDiscount > 0) for (const d of db.designs) d.discount = 0;
   writeDb(db);
   sendJson(res, 200, db.settings);
@@ -361,7 +368,7 @@ function deleteMessage(id, res) {
 }
 
 // ─── Orders (Supabase, admin only) ─────────────────────────────────────────────────────
-const ORDER_STATUSES = ['pending', 'paid', 'in_production', 'shipped', 'completed', 'cancelled'];
+const ORDER_STATUSES = ['pending', 'payment_submitted', 'paid', 'in_production', 'shipped', 'completed', 'cancelled'];
 
 // Calls Supabase with the secret key. Throws with Supabase's message on failure.
 async function supa(pathAndQuery, options = {}) {
@@ -420,6 +427,171 @@ async function artDownload(id, index, res) {
   sendJson(res, 200, { url });
 }
 
+// ─── Checkout (customers) ──────────────────────────────────────────────────────────────
+// The cart page sends only what's in the cart and the delivery details. Every price is worked out
+// here from the catalogue (designs.json + catalog.js), with the same rules the shop pages show.
+const SHIPPING_FEE = 3; // flat, per order (SGD); the cart page shows the same
+const MAX_QTY = 20;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const badRequest = (msg) => Object.assign(new Error(msg), { status: 400 });
+
+// The logged-in customer, from the Supabase access token the page sends. Null if not logged in.
+async function customerFrom(req) {
+  const m = /^Bearer (\S+)$/.exec(req.headers.authorization || '');
+  if (!m || !SUPABASE_URL || !SUPABASE_SECRET) return null;
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${m[1]}` } });
+  if (!res.ok) return null;
+  const user = await res.json();
+  return user && user.id ? user : null;
+}
+
+// Texture of a colour on a binder type (velvet for velvet colours), or null for single-texture types.
+function finishOf(type, color) {
+  if (!type.finishes) return null;
+  return type.finishes.find((f) => f.colors.includes(color)) || type.finishes[0];
+}
+const colorName = (value) => BINDER_COLORS.find((c) => c.id === value).name;
+const cents = (n) => Math.round(n * 100);
+
+// One cart line → an order line with its price. Throws a 400 for anything that isn't for sale.
+function priceLine(item, user, db) {
+  const qty = Number(item && item.qty);
+  if (!Number.isInteger(qty) || qty < 1 || qty > MAX_QTY) throw badRequest(`Quantities must be from 1 to ${MAX_QTY}.`);
+  const color = String(item.color || '');
+
+  // Custom design: the binder's base price plus any texture surcharge; never discounted.
+  if (item.custom === true) {
+    const type = BINDER_TYPES.find((t) => t.id === item.type);
+    if (!type) throw badRequest('A custom design in your cart uses a binder type we no longer sell. Please remove it.');
+    if (!type.colors.includes(color)) throw badRequest('A custom design in your cart has an unknown colour.');
+    const artPath = String(item.art_path || '');
+    if (!artPath.startsWith(`${user.id}/`) || artPath.includes('..')) throw badRequest('The artwork for a custom design is missing. Please remove it and add it again.');
+    const finish = finishOf(type, color);
+    const price = type.basePrice + ((finish && finish.extraPrice) || 0);
+    return {
+      name: 'Custom design', binder_type: type.name, color, color_name: colorName(color),
+      unit_price: price, original_price: price, discount_percent: 0, qty,
+      custom: true, texture: finish ? finish.name : 'Diamond texture', art_path: artPath,
+    };
+  }
+
+  // Shop design: the admin's price plus any texture surcharge, less the storewide discount while
+  // it's on, otherwise the design's own discount (they never stack).
+  const design = db.designs.find((d) => d.id === item.id);
+  if (!design) throw badRequest('Something in your cart is no longer sold. Please refresh the cart page.');
+  const type = BINDER_TYPES.find((t) => t.id === design.type) || BINDER_TYPES.find((t) => t.id === '9-pocket');
+  if (!type.colors.includes(color)) throw badRequest(`"${design.name}" isn't available in that colour.`);
+  const finish = finishOf(type, color);
+  const original = design.price + ((finish && finish.extraPrice) || 0);
+  const discount = db.settings.storeDiscount > 0 ? db.settings.storeDiscount : design.discount || 0;
+  const price = discount ? Math.round(original * (100 - discount)) / 100 : original;
+  return {
+    design_id: design.id, name: design.name, binder_type: type.name, color, color_name: colorName(color),
+    unit_price: price, original_price: original, discount_percent: discount, qty,
+  };
+}
+
+// Delivery details, checked with the same rules as the cart page.
+function checkDetails(d) {
+  const s = (v, max) => String(v ?? '').trim().slice(0, max);
+  const out = {
+    contact_method: s(d.contactMethod, 10), contact: s(d.contact, 100), customer_name: s(d.name, 80),
+    phone: s(d.phone, 20), address: s(d.address, 200), unit_number: s(d.unit, 20) || null, postal_code: s(d.postal, 6),
+  };
+  if (out.contact_method === 'telegram') {
+    if (!/^@?[A-Za-z0-9_]{5,32}$/.test(out.contact)) throw badRequest('Please enter your Telegram username, e.g. @tcgengrave.');
+    out.contact = out.contact.replace(/^@/, '');
+  } else if (out.contact_method === 'gmail') {
+    if (!/^[^\s@]+@gmail\.com$/i.test(out.contact)) throw badRequest('Please enter a Gmail address, e.g. name@gmail.com.');
+    out.contact = out.contact.toLowerCase();
+  } else throw badRequest('Please choose how we should contact you.');
+  if (!out.customer_name) throw badRequest('Please enter your name.');
+  if (!/^(\+?65[\s-]?)?[3689]\d{3}[\s-]?\d{4}$/.test(out.phone)) throw badRequest('Please enter a Singapore phone number, e.g. 9123 4567.');
+  if (!out.address) throw badRequest('Please enter your address.');
+  if (!/^\d{6}$/.test(out.postal_code)) throw badRequest('Please enter a 6-digit postal code.');
+  return out;
+}
+
+// POST /api/checkout { orderId, items, details } → { orderId, total }
+async function checkout(req, res) {
+  const user = await customerFrom(req);
+  if (!user) return sendJson(res, 401, { error: 'Please log in again to check out.' });
+  const body = JSON.parse(await readBody(req, 256 * 1024));
+  const orderId = String(body.orderId || '');
+  if (!UUID_RE.test(orderId)) return sendJson(res, 400, { error: 'Bad order id' });
+  if (!Array.isArray(body.items) || !body.items.length || body.items.length > 50) return sendJson(res, 400, { error: 'Your cart is empty.' });
+
+  const db = readDb();
+  const items = body.items.map((i) => priceLine(i, user, db));
+  const details = checkDetails(body.details || {});
+  const subtotal = cents(items.reduce((sum, l) => sum + l.unit_price * l.qty, 0)) / 100;
+  const total = cents(subtotal + SHIPPING_FEE) / 100;
+
+  const [existing] = await supa(`/rest/v1/orders?select=id&id=eq.${orderId}`);
+  if (existing) return sendJson(res, 409, { error: 'This order has already been placed. Please refresh the cart page.' });
+  await supa('/rest/v1/orders', {
+    method: 'POST',
+    body: JSON.stringify({
+      id: orderId, user_id: user.id, status: 'pending',
+      items, item_count: items.reduce((n, l) => n + l.qty, 0), subtotal, shipping_fee: SHIPPING_FEE, total,
+      ...details,
+    }),
+  });
+  sendJson(res, 200, { orderId, total });
+}
+
+// ─── PayNow payment proof ──────────────────────────────────────────────────────────────
+// After checkout the customer pays by scanning the shop's static PayNow QR code, then uploads a
+// screenshot to the private "payment-proofs" bucket (in a folder named after them). The order moves
+// to 'payment_submitted' until the admin checks the proof and marks it paid.
+
+// A short-lived link to a private storage file. Throws if the file doesn't exist.
+async function signedUrl(bucket, filePath, downloadName) {
+  const signed = await supa(`/storage/v1/object/sign/${bucket}/${filePath.split('/').map(encodeURIComponent).join('/')}`, {
+    method: 'POST',
+    body: JSON.stringify({ expiresIn: 300 }),
+  });
+  return `${SUPABASE_URL}/storage/v1${signed.signedURL}${downloadName ? `&download=${encodeURIComponent(downloadName)}` : ''}`;
+}
+
+// GET /api/checkout/<id>: the customer's own order, for the payment page.
+async function customerOrder(orderId, req, res) {
+  const user = await customerFrom(req);
+  if (!user) return sendJson(res, 401, { error: 'Please log in to see this order.' });
+  const [order] = await supa(`/rest/v1/orders?select=id,user_id,status,total,currency,payment_proof_path&id=eq.${orderId}`);
+  if (!order || order.user_id !== user.id) return sendJson(res, 404, { error: 'Order not found.' });
+  sendJson(res, 200, { orderId, status: order.status, total: Number(order.total), currency: order.currency, proofSubmitted: !!order.payment_proof_path });
+}
+
+// POST /api/checkout/<id>/proof { path }: records the uploaded screenshot on the customer's order.
+async function submitProof(orderId, req, res) {
+  const user = await customerFrom(req);
+  if (!user) return sendJson(res, 401, { error: 'Please log in again to submit your payment.' });
+  const { path: proofPath } = JSON.parse(await readBody(req, 4096));
+  const p = String(proofPath || '');
+  if (!p.startsWith(`${user.id}/`) || p.includes('..')) return sendJson(res, 400, { error: 'Please upload your payment screenshot again.' });
+  const [order] = await supa(`/rest/v1/orders?select=id,user_id,status&id=eq.${orderId}`);
+  if (!order || order.user_id !== user.id) return sendJson(res, 404, { error: 'Order not found.' });
+  if (!['pending', 'payment_submitted'].includes(order.status)) return sendJson(res, 409, { error: 'This order has already been paid.' });
+  try {
+    await signedUrl('payment-proofs', p); // makes sure the file really was uploaded
+  } catch {
+    return sendJson(res, 400, { error: "We couldn't find your screenshot. Please upload it again." });
+  }
+  await supa(`/rest/v1/orders?id=eq.${orderId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'payment_submitted', payment_proof_path: p, payment_submitted_at: new Date().toISOString() }),
+  });
+  sendJson(res, 200, { orderId, status: 'payment_submitted' });
+}
+
+// GET /api/orders/<id>/proof (admin): a link to view the customer's payment screenshot.
+async function proofLink(id, res) {
+  const [order] = await supa(`/rest/v1/orders?select=id,payment_proof_path&id=eq.${id}`);
+  if (!order || !order.payment_proof_path) return sendJson(res, 404, { error: 'No payment proof for this order' });
+  sendJson(res, 200, { url: await signedUrl('payment-proofs', order.payment_proof_path) });
+}
+
 function serveStatic(req, res, pathname) {
   let rel;
   try {
@@ -461,6 +633,10 @@ http.createServer(async (req, res) => {
       if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
       return await createDesign(req, res);
     }
+    if (pathname === '/api/checkout' && req.method === 'POST') return await checkout(req, res);
+    const customerMatch = /^\/api\/checkout\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(\/proof)?$/.exec(pathname);
+    if (customerMatch && !customerMatch[2] && req.method === 'GET') return await customerOrder(customerMatch[1], req, res);
+    if (customerMatch && customerMatch[2] && req.method === 'POST') return await submitProof(customerMatch[1], req, res);
     if (pathname.startsWith('/api/orders') && !isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
     if (pathname === '/api/orders' && req.method === 'GET') return await listOrders(res);
     const uuid = '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})';
@@ -468,6 +644,8 @@ http.createServer(async (req, res) => {
     if (orderMatch && req.method === 'PATCH') return await updateOrderStatus(orderMatch[1], req, res);
     const artMatch = new RegExp(`^/api/orders/${uuid}/art/(\\d{1,3})$`).exec(pathname);
     if (artMatch && req.method === 'GET') return await artDownload(artMatch[1], Number(artMatch[2]), res);
+    const proofMatch = new RegExp(`^/api/orders/${uuid}/proof$`).exec(pathname);
+    if (proofMatch && req.method === 'GET') return await proofLink(proofMatch[1], res);
     if (pathname === '/api/settings' && req.method === 'PATCH') {
       if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
       return await updateSettings(req, res);

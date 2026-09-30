@@ -4,9 +4,10 @@
   const empty = document.getElementById('empty');
   const count = document.getElementById('count');
 
-  let designs, collections;
+  let designs, collections, settings;
   try {
-    ({ designs, collections } = await Shop.loadCatalog());
+    ({ designs, collections, settings } = await Shop.loadCatalog());
+    Shop.saleBanner(settings); // scrolling sale message while a storewide discount is on
   } catch (err) {
     empty.hidden = false;
     empty.textContent = 'Designs could not be loaded. Start the site with "npm start" and open http://localhost:3000.';
