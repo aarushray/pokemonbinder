@@ -4,14 +4,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Custom Designs · PokeEngrave</title>
+  <title>Custom Designs · TCGEngrave</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 
 <body>
   <header class="site-header">
     <div class="container">
-      <a class="logo" href="index.html">PokeEngrave</a>
+      <a class="logo" href="index.html">TCGEngrave</a>
       <nav class="nav">
         <a href="index.html">Home</a>
         <a href="custom.html" aria-current="page">Custom Designs</a>
@@ -31,20 +31,22 @@
     <div class="designer">
       <section class="panel" aria-label="Design controls">
         <div class="group">
-          <h2>Binder</h2>
+          <h2>Step 1: Choose a binder</h2>
           <div id="types" class="type-options" role="radiogroup" aria-label="Binder type"></div>
+        </div>
+
+        <div class="group">
+          <h2>Step 2: Choose a texture</h2>
           <label id="finishField" class="field finish-field" hidden>
-            <span>Texture</span>
-            <select id="finish"></select>
+            <select id="finish" aria-label="Texture"></select>
           </label>
           <div id="finishFixed" class="field finish-field" hidden>
-            <span>Texture</span>
             <div class="fixed-value">Diamond texture</div>
           </div>
         </div>
 
         <div class="group">
-          <h2>Design</h2>
+          <h2>Step 3: Upload your design</h2>
           <label id="dropzone" class="dropzone" for="fileInput">
             <input id="fileInput" type="file" accept="image/*" hidden />
             <span class="dz-main">Drop an image here or <u>browse</u></span>
@@ -55,26 +57,47 @@
         </div>
 
         <div class="group">
-          <h2>Binder colour</h2>
+          <h2>Step 4: Choose a binder colour</h2>
           <div id="swatches" class="swatches" role="radiogroup" aria-label="Binder colour"></div>
           <p id="colorName" class="note"></p>
         </div>
       </section>
 
-      <section class="stage" aria-label="Preview">
-        <canvas id="canvas"></canvas>
-      </section>
+      <div class="preview-col">
+        <section class="stage" aria-label="Preview">
+          <canvas id="canvas"></canvas>
+        </section>
+        <p class="preview-note">Please note: The preview is a digital representation of your design. Actual engraving
+          may vary slightly in colour, depth, texture and appearance depending on the material and artwork.</p>
+
+        <div class="custom-buy">
+          <div class="custom-buy-summary">
+            <span id="buySummary" class="muted"></span>
+            <strong id="buyPrice" class="custom-buy-price"></strong>
+          </div>
+          <div class="custom-buy-row">
+            <div class="qty" aria-label="Quantity">
+              <button id="minus" type="button" aria-label="Decrease quantity">−</button>
+              <span id="qty">1</span>
+              <button id="plus" type="button" aria-label="Increase quantity">+</button>
+            </div>
+            <button id="addBtn" class="btn" type="button" disabled>Add to cart</button>
+          </div>
+          <p id="buyNote" class="note custom-buy-note">Upload your design (step 3) to add it to your cart.</p>
+        </div>
+      </div>
     </div>
   </main>
 
   <footer class="site-footer">
-    <div class="container">© PokeEngrave</div>
+    <div class="container">© TCGEngrave</div>
   </footer>
 
   <script src="js/sample.js"></script>
   <script src="js/catalog.js"></script>
   <script src="js/binder.js"></script>
   <script src="js/common.js"></script>
+  <script src="js/custom-art.js"></script>
   <script src="js/custom.js"></script>
 </body>
 

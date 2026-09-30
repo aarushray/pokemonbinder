@@ -38,6 +38,17 @@
     return (list.find((f) => f.colors.includes(colorId)) || list[0]).id;
   }
 
+  // Extra cost of a texture (velvet +5), or 0.
+  function finishExtra(typeId, finishId) {
+    const f = (finishes(typeId) || []).find((f) => f.id === finishId);
+    return (f && f.extraPrice) || 0;
+  }
+
+  // Texture name for dropdowns, with its surcharge, e.g. "Velvet texture (+5)".
+  function finishLabel(f) {
+    return f.extraPrice ? `${f.name} (+${f.extraPrice})` : f.name;
+  }
+
   // A colour value is a COLORS id, or any hex code (custom colours from the colour wheel).
   // Anything else (e.g. a colour since removed from the catalogue) falls back to the first colour.
   function resolveColor(value) {
@@ -398,5 +409,5 @@
     ctx.stroke();
   }
 
-  window.Binder = { COLORS, TYPES, DEFAULT_TYPE, getType, typeColors, finishes, finishColors, finishOf, render, colorName, colorHex };
+  window.Binder = { COLORS, TYPES, DEFAULT_TYPE, getType, typeColors, finishes, finishColors, finishOf, finishExtra, finishLabel, render, colorName, colorHex };
 })();

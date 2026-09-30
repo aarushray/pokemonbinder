@@ -1,6 +1,23 @@
 {
   "designs": [
     {
+      "id": "scream-psyduck-159c2e",
+      "name": "Scream psyduck",
+      "price": 80,
+      "color": "#fbcb46",
+      "type": "9-pocket",
+      "cards": 360,
+      "page": "pokemon",
+      "subclasses": [
+        "Pikachu"
+      ],
+      "art": "designs/scream-psyduck-159c2e-art.jpg",
+      "thumb": "designs/scream-psyduck-159c2e-thumb.webp",
+      "createdAt": "2026-09-30T01:15:21.504Z",
+      "discount": 0,
+      "updatedAt": "2026-09-30T01:35:04.321Z"
+    },
+    {
       "id": "dragon-ball-collector-9e7fcb",
       "name": "Dragon ball collector",
       "price": 64.99,
@@ -140,5 +157,8 @@
       "name": "Dragon Ball",
       "subclasses": []
     }
-  ]
+  ],
+  "settings": {
+    "storeDiscount": 20
+  }
 }

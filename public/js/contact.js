@@ -25,7 +25,7 @@ function problem() {
     return msg;
   };
   if (!v('name')) return bad('name', 'Please enter your name.');
-  if (!/^@?[A-Za-z0-9_]{5,32}$/.test(v('telegram'))) return bad('telegram', 'Please enter a valid Telegram handle, e.g. @pokeengrave.');
+  if (!/^@?[A-Za-z0-9_]{5,32}$/.test(v('telegram'))) return bad('telegram', 'Please enter a valid Telegram handle, e.g. @tcgengrave.');
   if (v('phone') && !/^[0-9+()\-\s]{6,30}$/.test(v('phone'))) return bad('phone', 'Please enter a valid phone number.');
   if (!v('description')) return bad('description', 'Please describe the art you would like.');
   return '';

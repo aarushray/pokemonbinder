@@ -315,6 +315,20 @@
     cards.addEventListener('input', () => { item.cards = cards.value; });
     cardsField.appendChild(cards);
 
+    const discountField = document.createElement('label');
+    discountField.className = 'field';
+    discountField.innerHTML = '<span>Discount % (optional)</span>';
+    const discount = document.createElement('input');
+    discount.type = 'number';
+    discount.min = '0';
+    discount.max = '90';
+    discount.step = '1';
+    discount.placeholder = 'None';
+    discount.value = item.discount;
+    discount.addEventListener('input', () => { item.discount = discount.value; });
+    discountField.appendChild(discount);
+    lockDiscount(discount);
+
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'link';
@@ -324,7 +338,7 @@
       renderQueue();
     });
 
-    el.append(canvas, warn, nameField, pagePicker, typeField, colorField, cardsField, remove);
+    el.append(canvas, warn, nameField, pagePicker, typeField, colorField, cardsField, discountField, remove);
     item.el = el;
     fillColors();
     checkRatio();
@@ -336,7 +350,7 @@
       if (!/^image\/(png|jpeg|webp)$/.test(file.type)) continue;
       const img = await Shop.loadImage(URL.createObjectURL(file)).catch(() => null);
       if (!img) continue;
-      const item = { file, img, name: nameFromFile(file), page: null, subclasses: [], type: Binder.DEFAULT_TYPE, color: null, cards: '' };
+      const item = { file, img, name: nameFromFile(file), page: null, subclasses: [], type: Binder.DEFAULT_TYPE, color: null, cards: '', discount: '' };
       buildQueueItem(item);
       queue.push(item);
     }
@@ -361,6 +375,9 @@
     const wholeNumber = (v, max) => Number.isInteger(Number(v)) && v >= 1 && v <= max;
     const badSize = queue.find((i) => i.cards === '' || !wholeNumber(i.cards, 10000));
     if (badSize) return setStatus(`"${badSize.name}" needs how many cards it holds (a whole number from 1 to 10000).`, true);
+    const okDiscount = (v) => v === '' || (Number.isInteger(Number(v)) && v >= 0 && v <= 90);
+    const badDiscount = queue.find((i) => !okDiscount(i.discount));
+    if (badDiscount) return setStatus(`"${badDiscount.name}" has an invalid discount (a whole number from 0 to 90, or leave it blank).`, true);
     const noPage = queue.find((i) => !i.page);
     if (noPage) return setStatus(`"${noPage.name}" needs a page. Add one in Pages above first.`, true);
 
@@ -387,6 +404,7 @@
             page: item.page,
             subclasses: item.subclasses,
             cards: Number(item.cards),
+            discount: item.discount === '' ? 0 : Number(item.discount),
             art: await fileToDataUrl(item.file),
             thumb: thumbCanvas.toDataURL('image/webp', 0.85),
           }),
@@ -479,7 +497,8 @@
       title.textContent = d.name;
       const meta = document.createElement('span');
       meta.className = 'muted';
-      meta.textContent = `${Shop.designType(d).name} · ${Binder.colorName(d.color)} · ${d.cards ?? 540} cards · ${Shop.money(d.price)}`;
+      meta.textContent = `${Shop.designType(d).name} · ${Binder.colorName(d.color)} · ${d.cards ?? 540} cards · ${Shop.money(d.price)}`
+        + (d.discount > 0 ? ` · ${d.discount}% off` : '');
       const onPage = !!Shop.pageOf(d, collections);
       const pages = document.createElement('span');
       pages.className = onPage ? 'tag-hint' : 'tag-hint warn-text';
@@ -499,7 +518,7 @@
     }
 
     function showEdit() {
-      const draft = { name: d.name, page: d.page, subclasses: [...(d.subclasses || [])], type: Shop.designType(d).id, color: d.color, cards: d.cards ?? '', price: d.price };
+      const draft = { name: d.name, page: d.page, subclasses: [...(d.subclasses || [])], type: Shop.designType(d).id, color: d.color, cards: d.cards ?? '', price: d.price, discount: d.discount || '' };
       const canvas = document.createElement('canvas');
       let art = null;
       const draw = () => {
@@ -540,6 +559,16 @@
       price.value = draft.price;
       price.addEventListener('input', () => { draft.price = price.value; });
 
+      const discount = document.createElement('input');
+      discount.type = 'number';
+      discount.min = '0';
+      discount.max = '90';
+      discount.step = '1';
+      discount.placeholder = 'None';
+      discount.value = draft.discount;
+      discount.addEventListener('input', () => { draft.discount = discount.value; });
+      lockDiscount(discount);
+
       const sizeRow = document.createElement('div');
       sizeRow.className = 'field-row';
       sizeRow.append(field('Cards held', cards), field('Price', price));
@@ -555,7 +584,7 @@
       save.addEventListener('click', async () => {
         error.hidden = true;
         save.disabled = true;
-        const body = { name: draft.name.trim(), page: draft.page, subclasses: draft.subclasses, type: draft.type, color: draft.color, cards: Number(draft.cards), price: Number(draft.price) };
+        const body = { name: draft.name.trim(), page: draft.page, subclasses: draft.subclasses, type: draft.type, color: draft.color, cards: Number(draft.cards), price: Number(draft.price), discount: draft.discount === '' ? 0 : Number(draft.discount) };
         // The shop thumbnail shows the type and colour, so redraw it when either changed.
         if ((draft.type !== Shop.designType(d).id || draft.color !== d.color) && art) {
           const thumb = document.createElement('canvas');
@@ -585,7 +614,7 @@
 
       el.replaceChildren(canvas, field('Name', name), pageField(draft),
         field('Binder type', typeSelect),
-        field('Binder colour', colorSelect), sizeRow, error, actions);
+        field('Binder colour', colorSelect), sizeRow, field('Discount % (optional)', discount), error, actions);
     }
 
     showView();
@@ -611,6 +640,56 @@
   window.addEventListener('dragover', (e) => e.preventDefault());
   window.addEventListener('drop', (e) => e.preventDefault());
   publishBtn.addEventListener('click', publish);
+
+  // While a storewide discount is on, binders can't have their own: every per-binder discount
+  // field is emptied and disabled. They unlock when the storewide discount goes back to 0.
+  let storeDiscountOn = false;
+  function lockDiscount(input) {
+    input.classList.add('own-discount');
+    input.disabled = storeDiscountOn;
+    input.placeholder = storeDiscountOn ? 'Storewide sale on' : 'None';
+    input.title = storeDiscountOn ? 'Set the storewide discount to 0 to give binders their own discount.' : '';
+    if (storeDiscountOn && input.value !== '') {
+      input.value = '';
+      input.dispatchEvent(new Event('input')); // clears the queue item or edit draft too
+    }
+  }
+  function setStoreDiscountOn(on) {
+    storeDiscountOn = on;
+    for (const input of document.querySelectorAll('input.own-discount')) lockDiscount(input);
+  }
+
+  const storeDiscountInput = document.getElementById('storeDiscount');
+  const storeDiscountStatus = document.getElementById('storeDiscountStatus');
+  const showStoreStatus = (msg, isError) => {
+    storeDiscountStatus.hidden = !msg;
+    storeDiscountStatus.textContent = msg;
+    storeDiscountStatus.classList.toggle('error', !!isError);
+  };
+  Shop.loadCatalog().then(({ settings }) => {
+    storeDiscountInput.value = settings.storeDiscount || '';
+    setStoreDiscountOn(settings.storeDiscount > 0);
+  }).catch(() => {});
+  document.getElementById('storeDiscountForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const v = storeDiscountInput.value === '' ? 0 : Number(storeDiscountInput.value);
+    if (!Number.isInteger(v) || v < 0 || v > 90) return showStoreStatus('Enter a whole number from 0 to 90.', true);
+    try {
+      await adminFetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeDiscount: v }),
+      });
+    } catch (err) {
+      return showStoreStatus(err.message, true);
+    }
+    setStoreDiscountOn(v > 0);
+    await Shop.loadDesigns(true); // binders' own discounts were reset on the server
+    loadPublished();
+    showStoreStatus(v
+      ? `Storewide discount set to ${v}% off. Binders' own discounts have been reset to 0 and are locked until the storewide discount is back to 0.`
+      : 'Storewide discount removed. You can give binders their own discount again.');
+  });
 
   loadPages().then(loadPublished);
 })();

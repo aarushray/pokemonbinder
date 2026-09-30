@@ -17,10 +17,9 @@
     return;
   }
 
-  document.title = `${design.name} · PokeEngrave`;
+  document.title = `${design.name} · TCGEngrave`;
   Shop.setPage(Shop.pageOf(design, collections)); // header dropdown and "All designs" follow this design's page
   document.getElementById('name').textContent = design.name;
-  document.getElementById('price').textContent = Shop.money(design.price);
   const type = Shop.designType(design);
   const colors = Binder.typeColors(type.id);
   document.getElementById('typeName').textContent = `${type.name} binder`;
@@ -57,6 +56,11 @@
   const finishSelect = document.getElementById('finish');
   const cardsEl = document.getElementById('cards');
   // Some textures have a fixed capacity (velvet always holds 540); otherwise use the design's own.
+  const priceEl = document.getElementById('price');
+  const showPrice = () => {
+    Shop.renderPrice(priceEl, Shop.sale(design, design.price + Binder.finishExtra(type.id, finish)));
+  };
+  showPrice();
   const showCards = () => {
     const fixed = (finishes || []).find((f) => f.id === finish)?.cards;
     cardsEl.textContent = `Holds ${fixed ?? design.cards ?? 540} cards`;
@@ -66,10 +70,11 @@
   // Every other binder only comes in the diamond texture, shown as a fixed label.
   document.getElementById('finishFixed').hidden = !!finishes;
   if (finishes) {
-    finishSelect.replaceChildren(...finishes.map((f) => new Option(f.name, f.id, false, f.id === finish)));
+    finishSelect.replaceChildren(...finishes.map((f) => new Option(Binder.finishLabel(f), f.id, false, f.id === finish)));
     finishSelect.addEventListener('change', () => {
       finish = finishSelect.value;
       showCards();
+      showPrice();
       showSwatches();
       if (art) draw();
       else colorName.textContent = Binder.colorName(color);

@@ -40,13 +40,45 @@ const Shop = (() => {
     writeCart(items);
   }
 
+  // Custom designs in the cart: { id: 'custom-…', custom: true, type, color, qty }, with the artwork
+  // kept by CustomArt under the same id. Each is its own line (never merged), priced at the binder's
+  // base price plus any texture surcharge, and never discounted.
+  const isCustom = (item) => item.custom === true;
+
+  function customPrice(item) {
+    const t = Binder.getType(item.type);
+    return t.basePrice + Binder.finishExtra(t.id, Binder.finishOf(t.id, item.color));
+  }
+
+  function addCustomToCart(entry) {
+    const items = readCart();
+    items.push({ ...entry, custom: true });
+    writeCart(items);
+  }
+
+  // Ids of every custom design in any cart on this browser (the current one and set-aside ones).
+  function customArtIds() {
+    const ids = new Set();
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key !== CART_KEY && !key.startsWith(`${CART_KEY}:`)) continue;
+        const items = JSON.parse(localStorage.getItem(key));
+        if (Array.isArray(items)) for (const it of items) if (isCustom(it)) ids.add(it.id);
+      }
+    } catch {
+      // Storage blocked: nothing to keep.
+    }
+    return ids;
+  }
+
   function clearCart() {
     writeCart([]);
   }
 
   // Carts belong to whoever is logged in on this browser. Logging out sets the cart aside for that
-  // account (so the next person starts empty); logging back in brings it back, merged with
-  // anything added while logged out.
+  // account (so the next person starts empty); logging back in brings back exactly that cart.
+  // Anything added while logged out is discarded on log in.
   const savedCartKey = (userId) => `${CART_KEY}:${userId}`;
 
   function stashCart(userId) {
@@ -66,16 +98,9 @@ const Shop = (() => {
       saved = JSON.parse(localStorage.getItem(savedCartKey(userId))) || [];
       localStorage.removeItem(savedCartKey(userId));
     } catch {
-      return;
+      // Storage blocked: the account starts with an empty cart.
     }
-    if (!Array.isArray(saved) || !saved.length) return;
-    const items = readCart();
-    for (const s of saved) {
-      const line = items.find((i) => i.id === s.id && i.color === s.color);
-      if (line) line.qty = Math.min(20, line.qty + s.qty);
-      else items.push(s);
-    }
-    writeCart(items);
+    writeCart(Array.isArray(saved) ? saved : []);
   }
 
   function cartCount() {
@@ -95,12 +120,15 @@ const Shop = (() => {
   // Designs and the shop's pages ({ designs, collections }), fetched once per page load.
   // Pass fresh = true after changing them (admin page).
   let catalogPromise = null;
+  let storeDiscount = 0; // percent, from the admin page (set when the catalogue loads)
+
   function loadCatalog(fresh = false) {
     if (fresh || !catalogPromise) {
       catalogPromise = fetch('designs/designs.json', { cache: 'no-store' }).then(async (res) => {
         if (!res.ok) throw new Error(`Could not load designs (${res.status})`);
         const db = await res.json();
-        return { designs: db.designs || [], collections: db.collections || [] };
+        storeDiscount = Number(db.settings && db.settings.storeDiscount) || 0;
+        return { designs: db.designs || [], collections: db.collections || [], settings: { storeDiscount } };
       });
       catalogPromise.catch(() => { catalogPromise = null; });
     }
@@ -121,6 +149,47 @@ const Shop = (() => {
   }
 
   const money = (n) => `$${Number(n).toFixed(2)}`;
+
+  // Price of a design in a colour: the admin's price, plus the texture surcharge when that colour
+  // is a velvet one (velvet is always $5 more than diamond).
+  function priceFor(design, color) {
+    const typeId = designType(design).id;
+    return design.price + Binder.finishExtra(typeId, Binder.finishOf(typeId, color));
+  }
+
+  // Discount on a shop design: the storewide one while it's on (binders' own discounts are reset
+  // and locked then), otherwise the binder's own. They never stack. (Custom designs don't use
+  // this, so they're never discounted.)
+  function discountFor(design) {
+    return storeDiscount > 0 ? storeDiscount : design.discount || 0;
+  }
+
+  // { original, price, discount } for a design at a full price (e.g. from priceFor).
+  function sale(design, original) {
+    const discount = discountFor(design);
+    const price = discount ? Math.round(original * (100 - discount)) / 100 : original;
+    return { original, price, discount };
+  }
+
+  // Writes a price into el: just the price, or the crossed-out original, the sale price and a
+  // "-20%" badge when discounted.
+  function renderPrice(el, info) {
+    el.classList.toggle('on-sale', info.discount > 0);
+    if (!info.discount) {
+      el.textContent = money(info.price);
+      return;
+    }
+    const was = document.createElement('s');
+    was.className = 'price-was';
+    was.textContent = money(info.original);
+    const now = document.createElement('span');
+    now.className = 'price-now';
+    now.textContent = money(info.price);
+    const badge = document.createElement('span');
+    badge.className = 'sale-badge';
+    badge.textContent = `-${info.discount}%`;
+    el.replaceChildren(was, ' ', now, ' ', badge);
+  }
 
   // Thumbnail URL that changes when the design is edited, so browsers don't show a stale image.
   const thumbUrl = (d) => (d.updatedAt ? `${d.thumb}?v=${encodeURIComponent(d.updatedAt)}` : d.thumb);
@@ -319,7 +388,7 @@ const Shop = (() => {
         text.append(name, meta);
         const price = document.createElement('span');
         price.className = 'search-price';
-        price.textContent = money(d.price);
+        renderPrice(price, sale(d, priceFor(d, d.color)));
         a.append(img, text, price);
         li.appendChild(a);
         return li;
@@ -358,7 +427,7 @@ const Shop = (() => {
   // Drops cart lines whose design has since been deleted from the shop.
   function pruneCart(validIds) {
     const items = readCart();
-    const kept = items.filter((i) => validIds.has(i.id));
+    const kept = items.filter((i) => isCustom(i) || validIds.has(i.id));
     if (kept.length !== items.length) writeCart(kept);
   }
 
@@ -367,7 +436,7 @@ const Shop = (() => {
   pageSwitcher();
 
   return {
-    readCart, addToCart, setQty, clearCart, stashCart, restoreCart, pruneCart, loadDesigns, loadImage, money, thumbUrl, swatches, designType,
+    isCustom, customPrice, addCustomToCart, customArtIds, priceFor, discountFor, sale, renderPrice, readCart, addToCart, setQty, clearCart, stashCart, restoreCart, pruneCart, loadDesigns, loadImage, money, thumbUrl, swatches, designType,
     loadCatalog, normTag, pageOf, currentPage, setPage,
   };
 })();

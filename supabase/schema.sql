@@ -1,4 +1,4 @@
--- PokeEngrave database setup for Supabase.
+-- TCGEngrave database setup for Supabase.
 -- Run this once in the Supabase dashboard: SQL Editor → New query → paste → Run.
 -- Safe to run again: it only creates what's missing and replaces the functions/policies.
 --
@@ -98,9 +98,51 @@ create policy "Orders: read own" on public.orders
 revoke all on public.profiles, public.orders from anon;
 grant select, update on public.profiles to authenticated;
 grant select, insert on public.orders to authenticated;
+-- The server's admin Orders page uses the service_role key, which also needs explicit access here.
+grant select, insert, update, delete on public.profiles, public.orders to service_role;
 
 -- Customers can place orders for themselves, always starting as 'pending'.
 -- They can't edit or delete orders; status changes are made by you in the dashboard.
 drop policy if exists "Orders: place own" on public.orders;
 create policy "Orders: place own" on public.orders
   for insert to authenticated with check (user_id = auth.uid() and status = 'pending');
+
+-- ─── Custom design artwork (Storage) ────────────────────────────────────────────────────
+-- Customers' own artwork for custom-design orders, uploaded at checkout to
+-- custom-art/<customer id>/<cart line id>.<ext>. The order line's art_path says which file.
+-- Private: only you (in the dashboard, Storage → custom-art) and the customer who uploaded it can see it.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('custom-art', 'custom-art', false, 26214400, array['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
+on conflict (id) do update
+  set public = false, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Custom art: upload own" on storage.objects;
+create policy "Custom art: upload own" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'custom-art' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "Custom art: read own" on storage.objects;
+create policy "Custom art: read own" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'custom-art' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ─── Checkout delivery details ──────────────────────────────────────────────────────────
+-- Entered on the cart page at checkout. Saved on the order, and on the customer's profile so the
+-- form is filled in next time. contact is the Telegram username (without @) or Gmail address.
+alter table public.profiles
+  add column if not exists contact_method text check (contact_method in ('telegram', 'gmail')),
+  add column if not exists contact        text,
+  add column if not exists address        text,
+  add column if not exists unit_number    text,
+  add column if not exists postal_code    text;
+
+alter table public.orders
+  add column if not exists contact_method text check (contact_method in ('telegram', 'gmail')),
+  add column if not exists contact        text,
+  add column if not exists customer_name  text,
+  add column if not exists phone          text,
+  add column if not exists address        text,
+  add column if not exists unit_number    text,
+  add column if not exists postal_code    text,
+  add column if not exists shipping_fee   numeric(10, 2) not null default 0 check (shipping_fee >= 0),
+  add column if not exists total          numeric(10, 2) check (total >= 0);

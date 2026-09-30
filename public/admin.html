@@ -4,16 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex" />
-  <title>Manage Designs · PokeEngrave</title>
+  <title>Manage Designs · TCGEngrave</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body data-no-pages>
   <header class="site-header">
     <div class="container">
-      <a class="logo" href="index.html">PokeEngrave</a>
+      <a class="logo" href="index.html">TCGEngrave</a>
       <nav class="nav">
         <a href="index.html">Shop</a>
         <a href="admin.html" aria-current="page">Manage designs</a>
+        <a href="orders.html" data-right>Orders</a>
         <a href="messages.html" data-right>Messages</a>
       </nav>
     </div>
@@ -35,6 +36,18 @@
           <button class="btn" type="submit">Add page</button>
         </form>
         <p id="pageStatus" class="status" hidden></p>
+      </div>
+    </section>
+
+    <section class="panel discount-panel">
+      <div class="group">
+        <h2>Storewide discount</h2>
+        <p class="note">Takes this percentage off every binder in the shop, on every page. Custom designs are never discounted. While it's on, binders' own discounts are reset to 0 and can't be edited. Set 0 to end the sale and allow binders' own discounts again.</p>
+        <form id="storeDiscountForm" class="add-page discount-form">
+          <label class="discount-input"><input id="storeDiscount" type="number" min="0" max="90" step="1" placeholder="0" aria-label="Storewide discount in percent" /><span>% off</span></label>
+          <button class="btn" type="submit">Save</button>
+        </form>
+        <p id="storeDiscountStatus" class="status" hidden></p>
       </div>
     </section>
 

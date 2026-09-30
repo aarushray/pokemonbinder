@@ -4,14 +4,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Cart · PokeEngrave</title>
+  <title>Cart · TCGEngrave</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 
 <body>
   <header class="site-header">
     <div class="container">
-      <a class="logo" href="index.html">PokeEngrave</a>
+      <a class="logo" href="index.html">TCGEngrave</a>
       <nav class="nav">
         <a href="index.html">Home</a>
         <a href="custom.html">Custom Designs</a>
@@ -36,11 +36,32 @@
     </div>
 
     <div id="cart" class="cart" hidden>
-      <div id="lines" class="cart-lines"></div>
+      <div class="cart-main">
+        <div id="lines" class="cart-lines"></div>
+
+        <form id="details" class="auth-form checkout-details" novalidate>
+          <h2>Delivery details</h2>
+          <div class="contact-pick">
+            <select id="contactMethod" aria-label="Contact method">
+              <option value="telegram">Telegram</option>
+              <option value="gmail">Gmail</option>
+            </select>
+            <input id="contact" maxlength="100" autocomplete="off" />
+          </div>
+          <input id="fullName" maxlength="80" placeholder="Name" aria-label="Name" autocomplete="name" />
+          <input id="phone" type="tel" maxlength="20" placeholder="Phone number" aria-label="Phone number" autocomplete="tel" />
+          <input id="address" maxlength="200" placeholder="Address" aria-label="Address" autocomplete="street-address" />
+          <div class="details-row">
+            <input id="unit" maxlength="20" placeholder="Unit number, e.g. #05-12 (optional)" aria-label="Unit number" autocomplete="address-line2" />
+            <input id="postal" inputmode="numeric" maxlength="6" placeholder="Postal code" aria-label="Postal code" autocomplete="postal-code" />
+          </div>
+        </form>
+      </div>
       <aside class="summary">
         <div class="summary-row"><span>Items</span><span id="items"></span></div>
-        <div class="summary-row"><span>Shipping</span><span class="muted">Calculated at checkout</span></div>
-        <div class="summary-row total"><span>Subtotal</span><span id="subtotal"></span></div>
+        <div class="summary-row"><span>Subtotal</span><span id="subtotal"></span></div>
+        <div class="summary-row"><span>Shipping</span><span id="shipping"></span></div>
+        <div class="summary-row total"><span>Total</span><span id="total"></span></div>
         <button id="checkout" class="btn btn-block" type="button">Checkout</button>
         <p id="checkoutNote" class="note" hidden></p>
       </aside>
@@ -48,7 +69,7 @@
   </main>
 
   <footer class="site-footer">
-    <div class="container">© PokeEngrave</div>
+    <div class="container">© TCGEngrave</div>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -57,6 +78,7 @@
   <script src="js/catalog.js"></script>
   <script src="js/binder.js"></script>
   <script src="js/common.js"></script>
+  <script src="js/custom-art.js"></script>
   <script src="js/cart.js"></script>
 </body>
 

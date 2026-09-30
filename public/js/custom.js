@@ -4,6 +4,7 @@ const canvas = document.getElementById('canvas');
 
 const state = {
   image: null,
+  file: null, // the uploaded file itself (full quality), saved with the cart line
   type: Binder.DEFAULT_TYPE,
   color: null,
 };
@@ -24,6 +25,7 @@ function setColor(hex) {
   state.color = hex;
   colorName.textContent = Binder.colorName(hex);
   scheduleRender();
+  showBuy();
 }
 
 const typesEl = document.getElementById('types');
@@ -42,7 +44,8 @@ function setType(id) {
   // Every other binder only comes in the diamond texture, shown as a fixed label.
   document.getElementById('finishFixed').hidden = !!list;
   state.finish = list ? Binder.finishOf(id, state.color) : null;
-  if (list) finishSelect.replaceChildren(...list.map((f) => new Option(f.name, f.id, false, f.id === state.finish)));
+  if (list) finishSelect.replaceChildren(...list.map((f) => new Option(Binder.finishLabel(f), f.id, false, f.id === state.finish)));
+  showPrices();
   showImageInfo();
   showColors();
 }
@@ -60,8 +63,19 @@ const finishField = document.getElementById('finishField');
 const finishSelect = document.getElementById('finish');
 finishSelect.addEventListener('change', () => {
   state.finish = finishSelect.value;
+  showPrices();
   showColors();
 });
+
+// Price beside each binder type: its base price, plus the texture surcharge (velvet +$5) for the
+// selected binder.
+const prices = new Map();
+function showPrices() {
+  for (const t of Binder.TYPES) {
+    const finish = t.id === state.type ? (Binder.finishes(t.id) || []).find((f) => f.id === state.finish) : null;
+    prices.get(t.id).textContent = `$${t.basePrice + ((finish && finish.extraPrice) || 0)}`;
+  }
+}
 
 for (const t of Binder.TYPES) {
   const b = document.createElement('button');
@@ -78,7 +92,7 @@ for (const t of Binder.TYPES) {
   row.className = 'type-row';
   const price = document.createElement('span');
   price.className = 'type-price';
-  price.textContent = `$${t.basePrice}`;
+  prices.set(t.id, price);
   row.append(b, price);
   typesEl.appendChild(row);
 }
@@ -100,13 +114,15 @@ function showImageInfo() {
     : `${imageLabel}: ${img.naturalWidth} × ${img.naturalHeight} is not ${w}:${h}. It will be cropped to fill the cover.`;
 }
 
-function loadImage(src, label) {
+function loadImage(src, label, file) {
   const img = new Image();
   img.onload = () => {
     state.image = img;
+    state.file = file;
     imageLabel = label;
     showImageInfo();
     scheduleRender();
+    showBuy();
   };
   img.onerror = () => {
     fileInfo.hidden = false;
@@ -118,7 +134,7 @@ function loadImage(src, label) {
 
 function loadFile(file) {
   if (!file || !file.type.startsWith('image/')) return;
-  loadImage(URL.createObjectURL(file), file.name);
+  loadImage(URL.createObjectURL(file), file.name, file);
 }
 
 fileInput.addEventListener('change', () => loadFile(fileInput.files[0]));
@@ -137,7 +153,68 @@ window.addEventListener('dragover', (e) => e.preventDefault());
 window.addEventListener('drop', (e) => { e.preventDefault(); loadFile(e.dataTransfer.files[0]); });
 
 document.getElementById('sampleBtn').addEventListener('click', () => {
-  if (window.SAMPLE_DESIGN) loadImage(window.SAMPLE_DESIGN, 'Sylveon sample');
+  if (!window.SAMPLE_DESIGN) return;
+  fetch(window.SAMPLE_DESIGN).then((r) => r.blob()).then((blob) => loadImage(window.SAMPLE_DESIGN, 'Sylveon sample', blob));
+});
+
+// ---- Add to cart (lower right, under the preview) ----
+// Custom designs are priced at the binder's base price plus any texture surcharge (never discounted).
+const MAX_ART_BYTES = 25 * 1024 * 1024;
+const addBtn = document.getElementById('addBtn');
+const buyNote = document.getElementById('buyNote');
+let qty = 1;
+
+function showBuy() {
+  if (!state.color) return;
+  const t = Binder.getType(state.type);
+  const finish = (Binder.finishes(t.id) || []).find((f) => f.id === Binder.finishOf(t.id, state.color));
+  document.getElementById('buySummary').textContent =
+    `${t.name} · ${finish ? finish.name : 'Diamond texture'} · ${Binder.colorName(state.color)}`;
+  document.getElementById('buyPrice').textContent = Shop.money(Shop.customPrice({ type: t.id, color: state.color }) * qty);
+  addBtn.disabled = !state.file;
+  const prompt = 'Upload your design (step 3) to add it to your cart.';
+  if (!state.file) {
+    buyNote.textContent = prompt;
+    buyNote.hidden = false;
+  } else if (buyNote.textContent === prompt) {
+    buyNote.hidden = true;
+  }
+}
+
+const qtyEl = document.getElementById('qty');
+const setQty = (n) => {
+  qty = Math.max(1, Math.min(20, n));
+  qtyEl.textContent = qty;
+  showBuy();
+};
+document.getElementById('minus').addEventListener('click', () => setQty(qty - 1));
+document.getElementById('plus').addEventListener('click', () => setQty(qty + 1));
+
+addBtn.addEventListener('click', async () => {
+  if (!state.file) return;
+  if (state.file.size > MAX_ART_BYTES) {
+    buyNote.textContent = 'This image is over 25 MB. Please upload a smaller file.';
+    buyNote.hidden = false;
+    return;
+  }
+  const id = `custom-${crypto.randomUUID()}`;
+  addBtn.disabled = true;
+  try {
+    await CustomArt.save(id, state.file);
+  } catch {
+    addBtn.disabled = false;
+    buyNote.textContent = "Couldn't save your design in this browser (private browsing can block this). Please try another browser.";
+    buyNote.hidden = false;
+    return;
+  }
+  Shop.addCustomToCart({ id, type: state.type, color: state.color, qty });
+  addBtn.disabled = false;
+  buyNote.hidden = false;
+  buyNote.replaceChildren(`Added ${qty} to your cart. `);
+  const link = document.createElement('a');
+  link.href = 'cart.html';
+  link.textContent = 'View cart';
+  buyNote.appendChild(link);
 });
 
 // Start with a blank binder; the design appears once one is uploaded (or the sample is chosen).

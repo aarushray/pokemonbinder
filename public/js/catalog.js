@@ -27,6 +27,7 @@
   // colors: colour ids from COLORS this type is sold in (first one is the default).
   // finishes (optional): texture choices shown as a dropdown, each limited to some of the colours.
   // A finish with `cards` always holds that many cards, overriding the design's own capacity.
+  // `extraPrice` is added to the binder's base price on the Custom Designs page.
   // shape: mockup geometry relative to a 1000px-wide cover. `height` (optional) scales the cover's
   // height from the art ratio; the art is then cropped top and bottom to fit. `display` (optional)
   // draws the binder that much smaller than the 9-pocket, centred in a 9-pocket-sized picture.
@@ -38,7 +39,7 @@
     { id: '9-pocket', name: '9-pocket', pockets: 9, basePrice: 80, ratio: [2, 3], colors: [...DIAMOND, ...VELVET],
       finishes: [
         { id: 'diamond', name: 'Diamond texture', colors: DIAMOND },
-        { id: 'velvet', name: 'Velvet texture', colors: VELVET, cards: 540 },
+        { id: 'velvet', name: 'Velvet texture', colors: VELVET, cards: 540, extraPrice: 5 },
       ],
       shape: { spine: 36, radius: 72, tab: false } },
     { id: '9-pocket-toploader', name: '9-pocket toploader', pockets: 9, basePrice: 100, ratio: [4, 5], colors: DIAMOND,

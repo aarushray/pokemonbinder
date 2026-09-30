@@ -54,7 +54,7 @@
 
   // Why the visitor was sent here (e.g. from the cart's Checkout button), shown above the form.
   const REASONS = {
-    checkout: 'Please log in or create an account to check out. Your cart is saved and will be waiting for you.',
+    checkout: "Please log in or create an account to check out. Items added to your cart before logging in won't be kept, so you'll need to add them again.",
   };
   const reason = REASONS[new URLSearchParams(location.search).get('reason')];
   if (reason && $('reasonNotice')) {
@@ -99,7 +99,7 @@
     async function loadOrders() {
       const list = $('orders');
       const { data, error } = await client.from('orders')
-        .select('id, status, items, item_count, subtotal, currency, created_at')
+        .select('id, status, items, item_count, subtotal, total, currency, created_at')
         .order('created_at', { ascending: false });
       if (error) {
         list.replaceChildren();
@@ -130,7 +130,7 @@
         }
         const total = document.createElement('div');
         total.className = 'order-total';
-        total.textContent = `${o.item_count} ${o.item_count === 1 ? 'item' : 'items'} · ${o.currency} ${Shop.money(o.subtotal)}`;
+        total.textContent = `${o.item_count} ${o.item_count === 1 ? 'item' : 'items'} · ${o.currency} ${Shop.money(o.total ?? o.subtotal)}${o.total != null ? ' incl. shipping' : ''}`;
         el.append(head, lines, total);
         return el;
       }));
@@ -206,6 +206,7 @@
       if (error) return setStatus(friendly(error), true);
       // With email confirmation on (Supabase's default) there's no session until the link is clicked.
       if (data.session) {
+        Shop.restoreCart(data.user.id);
         location.href = nextPage();
         return;
       }

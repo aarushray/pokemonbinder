@@ -51,7 +51,8 @@
     sub.textContent = subText(d.color);
     left.append(title, sub);
     const price = document.createElement('div');
-    price.textContent = Shop.money(d.price);
+    price.className = 'card-price';
+    Shop.renderPrice(price, Shop.sale(d, Shop.priceFor(d, d.color)));
     body.append(left, price);
     link.append(media, body);
 
@@ -65,6 +66,7 @@
     Shop.swatches(swatches, Binder.typeColors(type.id), d.color, async (hex) => {
       current = hex;
       sub.textContent = subText(hex);
+      Shop.renderPrice(price, Shop.sale(d, Shop.priceFor(d, hex)));
       setHref(hex);
       canvas.setAttribute('aria-label', `${d.name} binder in ${Binder.colorName(hex)}`);
       if (hex === d.color) {
@@ -132,7 +134,7 @@
     count.textContent = `${shown.length} ${shown.length === 1 ? 'design' : 'designs'}`;
     empty.hidden = shown.length > 0;
     empty.textContent = subFilter ? 'No designs in this category yet.' : `No ${page.name} designs yet.`;
-    document.title = `${page.name} binders · PokeEngrave`;
+    document.title = `${page.name} binders · TCGEngrave`;
     history.replaceState(null, '', `?page=${encodeURIComponent(page.id)}`);
   }
 

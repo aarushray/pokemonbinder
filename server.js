@@ -3,21 +3,36 @@
 // Layout: public/ holds everything the browser loads (HTML pages, css/, js/). Only public/ and
 // designs/ are served, so this file, package.json and .data/ never are.
 //
-// Data lives in designs/designs.json: { designs: [...], collections: [{ id, name, subclasses }] }.
+// Data lives in designs/designs.json: { designs: [...], collections: [{ id, name, subclasses }],
+// settings: { storeDiscount } }. Discounts are whole percentages (0 = none).
 // Collections are the shop's pages. Each design belongs to one page (`page`, a collection id) and
 // may be tagged with some of that page's subclasses (`subclasses`), which the shop uses as filters.
 //
 // Contact-form messages are saved in .data/messages.json. The dot folder is never served to
 // browsers and is ignored by git, so customers' details stay on this computer.
 //
-// Admin actions (upload/edit/delete designs, add/remove pages, read messages) are allowed from this computer only, unless
-// ADMIN_PASSWORD is set, in which case requests must send it in the X-Admin-Key header.
+// Customer orders live in Supabase. The admin Orders page reads them through this server using the
+// Supabase secret (service_role) key from the git-ignored .env file; that key never reaches a browser.
+//
+// Admin actions (upload/edit/delete designs, add/remove pages, read messages, manage orders) are
+// allowed from this computer only, unless ADMIN_PASSWORD is set, in which case requests must send
+// it in the X-Admin-Key header.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
 const ROOT = __dirname;
+
+// Settings from .env (KEY=value lines; # comments). Real environment variables take precedence.
+try {
+  for (const line of fs.readFileSync(path.join(ROOT, '.env'), 'utf8').split(/\r?\n/)) {
+    const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/.exec(line);
+    if (m && !(m[1] in process.env)) process.env[m[1]] = m[2].replace(/^(['"])(.*)\1$/, '$2');
+  }
+} catch {
+  // No .env file: that's fine until the Orders page is needed.
+}
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const DESIGNS_DIR = path.join(ROOT, 'designs');
 const DB_FILE = path.join(DESIGNS_DIR, 'designs.json');
@@ -28,6 +43,16 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const MAX_BODY = 40 * 1024 * 1024;
 
 const { TYPES: BINDER_TYPES } = require('./public/js/catalog.js');
+
+// Supabase project URL: from .env, or the one the website already uses (public/js/supabase-config.js).
+const SUPABASE_URL = (process.env.SUPABASE_URL || (() => {
+  try {
+    return /url:\s*'([^']+)'/.exec(fs.readFileSync(path.join(PUBLIC_DIR, 'js', 'supabase-config.js'), 'utf8'))[1];
+  } catch {
+    return '';
+  }
+})()).replace(/\/+$/, '');
+const SUPABASE_SECRET = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -56,6 +81,8 @@ function readDb() {
   }
   if (!Array.isArray(db.collections)) db.collections = DEFAULT_COLLECTIONS.map((c) => ({ ...c }));
   for (const c of db.collections) if (!Array.isArray(c.subclasses)) c.subclasses = [];
+  if (!db.settings || typeof db.settings !== 'object') db.settings = {};
+  if (!Number.isInteger(db.settings.storeDiscount)) db.settings.storeDiscount = 0;
   return db;
 }
 
@@ -152,7 +179,32 @@ function validateFields(body, db) {
   // Keep only subclasses that exist on that page, spelled as the page spells them.
   const wanted = new Set(cleanNames(body.subclasses).map(normTag));
   const subclasses = page.subclasses.filter((s) => wanted.has(normTag(s)));
-  return { fields: { name, price, color: body.color, type: type.id, cards, page: page.id, subclasses } };
+  const discount = parseDiscount(body.discount);
+  if (discount === null) return { error: 'Discount must be a whole number from 0 to 90 (percent)' };
+  if (discount > 0 && db.settings.storeDiscount > 0) {
+    return { error: 'A storewide discount is on, so binders can\'t have their own discount. Set the storewide discount to 0 first.' };
+  }
+  return { fields: { name, price, color: body.color, type: type.id, cards, page: page.id, subclasses, discount } };
+}
+
+// A discount percentage: blank means none (0); otherwise a whole number from 0 to 90. Null if invalid.
+function parseDiscount(value) {
+  if (value === undefined || value === null || value === '') return 0;
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 0 && n <= 90 ? n : null;
+}
+
+// Storewide discount for every shop design (custom designs are never discounted). Turning it on
+// resets every design's own discount to 0, so the two never stack.
+async function updateSettings(req, res) {
+  const body = JSON.parse(await readBody(req));
+  const storeDiscount = parseDiscount(body.storeDiscount);
+  if (storeDiscount === null) return sendJson(res, 400, { error: 'Storewide discount must be a whole number from 0 to 90 (percent)' });
+  const db = readDb();
+  db.settings.storeDiscount = storeDiscount;
+  if (storeDiscount > 0) for (const d of db.designs) d.discount = 0;
+  writeDb(db);
+  sendJson(res, 200, db.settings);
 }
 
 // A list (or comma-separated string) of short labels, trimmed, without duplicates.
@@ -308,6 +360,66 @@ function deleteMessage(id, res) {
   sendJson(res, 200, { ok: true });
 }
 
+// ─── Orders (Supabase, admin only) ─────────────────────────────────────────────────────
+const ORDER_STATUSES = ['pending', 'paid', 'in_production', 'shipped', 'completed', 'cancelled'];
+
+// Calls Supabase with the secret key. Throws with Supabase's message on failure.
+async function supa(pathAndQuery, options = {}) {
+  if (!SUPABASE_URL || !SUPABASE_SECRET) {
+    throw Object.assign(new Error('The Orders page isn\'t set up yet: add SUPABASE_SERVICE_ROLE_KEY to the .env file and restart the server.'), { status: 503 });
+  }
+  const headers = { apikey: SUPABASE_SECRET, 'Content-Type': 'application/json', ...(options.headers || {}) };
+  if (SUPABASE_SECRET.startsWith('eyJ')) headers.Authorization = `Bearer ${SUPABASE_SECRET}`; // legacy JWT keys
+  const res = await fetch(`${SUPABASE_URL}${pathAndQuery}`, { ...options, headers });
+  const text = await res.text();
+  const body = text ? JSON.parse(text) : null;
+  if (!res.ok) throw Object.assign(new Error((body && (body.message || body.error)) || `Supabase error ${res.status}`), { status: 502 });
+  return body;
+}
+
+// Short order number customers see, e.g. #3F9A1C2B (same as the website's).
+const orderNumber = (id) => String(id).slice(0, 8).toUpperCase();
+const fileSlug = (s) => String(s || '').normalize('NFD').replace(/\p{M}/gu, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'x';
+
+// Readable name for a custom design's artwork, e.g. 3F9A1C2B_Ash-Ketchum_9-pocket_Grey_1.png
+function artFileName(order, line, index) {
+  const ext = (/\.([a-z0-9]+)$/i.exec(line.art_path || '') || [, 'jpg'])[1];
+  return `${orderNumber(order.id)}_${fileSlug(order.customer_name || 'customer')}_${fileSlug(line.binder_type)}_${fileSlug(line.color_name)}_${index + 1}.${ext}`;
+}
+
+async function listOrders(res) {
+  const orders = await supa('/rest/v1/orders?select=*&order=created_at.desc');
+  const ids = [...new Set(orders.map((o) => o.user_id))];
+  const profiles = ids.length ? await supa(`/rest/v1/profiles?select=id,email&id=in.(${ids.join(',')})`) : [];
+  const emails = new Map(profiles.map((p) => [p.id, p.email]));
+  sendJson(res, 200, orders.map((o) => ({ ...o, account_email: emails.get(o.user_id) || null })));
+}
+
+async function updateOrderStatus(id, req, res) {
+  const { status } = JSON.parse(await readBody(req, 4096));
+  if (!ORDER_STATUSES.includes(status)) return sendJson(res, 400, { error: 'Unknown status' });
+  const rows = await supa(`/rest/v1/orders?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify({ status }),
+  });
+  if (!rows.length) return sendJson(res, 404, { error: 'Order not found' });
+  sendJson(res, 200, rows[0]);
+}
+
+// A short-lived download link for one custom design's artwork, saved under a readable name.
+async function artDownload(id, index, res) {
+  const [order] = await supa(`/rest/v1/orders?select=*&id=eq.${id}`);
+  const line = order && order.items[index];
+  if (!line || !line.art_path) return sendJson(res, 404, { error: 'No artwork for that item' });
+  const signed = await supa(`/storage/v1/object/sign/custom-art/${line.art_path.split('/').map(encodeURIComponent).join('/')}`, {
+    method: 'POST',
+    body: JSON.stringify({ expiresIn: 300 }),
+  });
+  const url = `${SUPABASE_URL}/storage/v1${signed.signedURL}&download=${encodeURIComponent(artFileName(order, line, index))}`;
+  sendJson(res, 200, { url });
+}
+
 function serveStatic(req, res, pathname) {
   let rel;
   try {
@@ -348,6 +460,17 @@ http.createServer(async (req, res) => {
     if (pathname === '/api/designs' && req.method === 'POST') {
       if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
       return await createDesign(req, res);
+    }
+    if (pathname.startsWith('/api/orders') && !isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
+    if (pathname === '/api/orders' && req.method === 'GET') return await listOrders(res);
+    const uuid = '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})';
+    const orderMatch = new RegExp(`^/api/orders/${uuid}$`).exec(pathname);
+    if (orderMatch && req.method === 'PATCH') return await updateOrderStatus(orderMatch[1], req, res);
+    const artMatch = new RegExp(`^/api/orders/${uuid}/art/(\\d{1,3})$`).exec(pathname);
+    if (artMatch && req.method === 'GET') return await artDownload(artMatch[1], Number(artMatch[2]), res);
+    if (pathname === '/api/settings' && req.method === 'PATCH') {
+      if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
+      return await updateSettings(req, res);
     }
     if (pathname === '/api/messages' && req.method === 'POST') return await createMessage(req, res);
     if (pathname === '/api/messages' && req.method === 'GET') {
