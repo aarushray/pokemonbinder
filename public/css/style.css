@@ -657,3 +657,9 @@ input.own-discount:disabled { background: var(--surface); color: var(--muted); c
 .admin-order-items li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
 .admin-order-items li .btn { margin-left: auto; }
 .admin-order-total { font-weight: 600; }
+
+/* Small phones: keep all header icons on screen (the SGD label is display-only, so it's hidden). */
+@media (max-width: 480px) {
+  .header-right { gap: 2px; }
+  .header-currency { display: none; }
+}

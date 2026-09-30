@@ -14,7 +14,8 @@
     { id: '#b82e40', name: 'Red', hex: '#b82e40' },
     { id: '#eeeeec', name: 'White', hex: '#eeeeec', depth: 700 },
     { id: '#2fb8ca', name: 'Turquoise', hex: '#2fb8ca', depth: 300 },
-    { id: '#74716c', name: 'Grey', hex: '#74716c', texture: 'felt', depth: 300 },
+    // Grey keeps its original id (saved designs and carts use it); only the shade changed.
+    { id: '#74716c', name: 'Grey', hex: '#969696', texture: 'felt', depth: 300 },
   ];
   // Every other colour, including custom colours from the colour wheel.
   const DEFAULT_DEPTH = 600;
