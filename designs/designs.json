@@ -1,6 +1,22 @@
 {
   "designs": [
     {
+      "id": "sabo-f7d2e5",
+      "name": "Sabo",
+      "price": 80,
+      "color": "#445479",
+      "type": "9-pocket",
+      "cards": 360,
+      "page": "one-piece",
+      "subclasses": [
+        "Sabo"
+      ],
+      "discount": 0,
+      "art": "designs/sabo-f7d2e5-art.jpg",
+      "thumb": "designs/sabo-f7d2e5-thumb.webp",
+      "createdAt": "2026-10-02T06:48:31.120Z"
+    },
+    {
       "id": "ace-2bedb3",
       "name": "Ace",
       "price": 80,
@@ -179,7 +195,8 @@
         "Ace",
         "Nami",
         "Chopper",
-        "Sanji"
+        "Sanji",
+        "Sabo"
       ]
     },
     {
