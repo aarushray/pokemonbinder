@@ -1,6 +1,22 @@
 {
   "designs": [
     {
+      "id": "ace-2bedb3",
+      "name": "Ace",
+      "price": 80,
+      "color": "#b75901",
+      "type": "9-pocket",
+      "cards": 360,
+      "page": "one-piece",
+      "subclasses": [
+        "Ace"
+      ],
+      "discount": 0,
+      "art": "designs/ace-2bedb3-art.jpg",
+      "thumb": "designs/ace-2bedb3-thumb.webp",
+      "createdAt": "2026-10-02T06:39:07.813Z"
+    },
+    {
       "id": "scream-psyduck-159c2e",
       "name": "Scream psyduck",
       "price": 80,
@@ -14,8 +30,8 @@
       "art": "designs/scream-psyduck-159c2e-art.jpg",
       "thumb": "designs/scream-psyduck-159c2e-thumb.webp",
       "createdAt": "2026-09-30T01:15:21.504Z",
-      "discount": 0,
-      "updatedAt": "2026-09-30T13:58:42.669Z"
+      "discount": 10,
+      "updatedAt": "2026-10-01T14:15:19.631Z"
     },
     {
       "id": "dragon-ball-collector-9e7fcb",
