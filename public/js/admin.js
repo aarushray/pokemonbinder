@@ -4,16 +4,7 @@
   const queueEl = document.getElementById('queue');
   const queueGroup = document.getElementById('queueGroup');
   const statusEl = document.getElementById('status');
-  const keyField = document.getElementById('keyField');
-  const keyInput = document.getElementById('adminKey');
   const publishBtn = document.getElementById('publishBtn');
-
-  try {
-    keyInput.value = sessionStorage.getItem('admin-key') || '';
-    if (keyInput.value) keyField.hidden = false;
-  } catch {
-    // sessionStorage unavailable: the password just won't be remembered.
-  }
 
   function setStatus(msg, isError = false) {
     statusEl.hidden = !msg;
@@ -206,11 +197,10 @@
   }
 
   async function adminFetch(url, options) {
-    const res = await fetch(url, { ...options, headers: { ...(options.headers || {}), 'X-Admin-Key': keyInput.value } }).catch(() => null);
-    if (res && res.status === 403) keyField.hidden = false;
+    const res = await AdminAuth.fetch(url, options).catch(() => null);
     if (!res || !res.ok) {
       const msg = res ? (await res.json().catch(() => ({}))).error : 'Could not reach the server.';
-      throw new Error(res && res.status === 403 ? 'Not allowed. Enter the admin password above.' : msg || 'Request failed.');
+      throw new Error(msg || 'Request failed.');
     }
     return res.json();
   }
@@ -381,9 +371,6 @@
     const noPage = queue.find((i) => !i.page);
     if (noPage) return setStatus(`"${noPage.name}" needs a page. Add one in Pages above first.`, true);
 
-    const key = keyInput.value;
-    try { sessionStorage.setItem('admin-key', key); } catch { /* not remembered */ }
-
     publishBtn.disabled = true;
     const total = queue.length;
     let done = 0;
@@ -393,9 +380,9 @@
         setStatus(`Publishing ${done + 1} of ${total}…`);
         const thumbCanvas = document.createElement('canvas');
         Binder.render(thumbCanvas, { image: item.img, color: item.color, type: item.type, scale: 0.5 });
-        const res = await fetch('/api/designs', {
+        const res = await AdminAuth.fetch('/api/designs', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Admin-Key': key },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: item.name.trim(),
             price,
@@ -409,10 +396,6 @@
             thumb: thumbCanvas.toDataURL('image/webp', 0.85),
           }),
         });
-        if (res.status === 403) {
-          keyField.hidden = false;
-          throw new Error('Not allowed. Enter the admin password and try again.');
-        }
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
           throw new Error(body.error || `Upload failed (${res.status})`);
@@ -435,13 +418,9 @@
 
   async function deleteDesign(d) {
     if (!confirm(`Delete "${d.name}" from the shop?`)) return;
-    const res = await fetch(`/api/designs/${encodeURIComponent(d.id)}`, {
-      method: 'DELETE',
-      headers: { 'X-Admin-Key': keyInput.value },
-    }).catch(() => null);
+    const res = await AdminAuth.fetch(`/api/designs/${encodeURIComponent(d.id)}`, { method: 'DELETE' }).catch(() => null);
     if (!res || !res.ok) {
-      if (res && res.status === 403) keyField.hidden = false;
-      alert(res && res.status === 403 ? 'Not allowed. Enter the admin password first.' : 'Delete failed.');
+      alert((res && (await res.json().catch(() => ({}))).error) || 'Delete failed.');
       return;
     }
     await loadPages();
@@ -591,16 +570,15 @@
           Binder.render(thumb, { image: art, color: draft.color, type: draft.type, scale: 0.5 });
           body.thumb = thumb.toDataURL('image/webp', 0.85);
         }
-        const res = await fetch(`/api/designs/${encodeURIComponent(d.id)}`, {
+        const res = await AdminAuth.fetch(`/api/designs/${encodeURIComponent(d.id)}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'X-Admin-Key': keyInput.value },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         }).catch(() => null);
         save.disabled = false;
         if (!res || !res.ok) {
           const msg = res ? (await res.json().catch(() => ({}))).error : 'Could not reach the server.';
-          if (res && res.status === 403) keyField.hidden = false;
-          error.textContent = res && res.status === 403 ? 'Not allowed. Enter the admin password above.' : msg || 'Save failed.';
+          error.textContent = msg || 'Save failed.';
           error.hidden = false;
           return;
         }

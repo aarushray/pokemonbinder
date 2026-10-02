@@ -55,6 +55,7 @@
   // Why the visitor was sent here (e.g. from the cart's Checkout button), shown above the form.
   const REASONS = {
     checkout: "Please log in or create an account to check out. Items added to your cart before logging in won't be kept, so you'll need to add them again.",
+    admin: 'Please log in with an admin account to manage the shop.',
   };
   const reason = REASONS[new URLSearchParams(location.search).get('reason')];
   if (reason && $('reasonNotice')) {
@@ -87,8 +88,20 @@
         const name = user.user_metadata && user.user_metadata.full_name;
         $('signedInAs').textContent = name ? `${name} (${user.email})` : user.email;
         loadOrders();
+        showAdminLink();
       }
     };
+
+    // Admin accounts get a link to the admin pages (the server decides who is an admin).
+    async function showAdminLink() {
+      const link = $('adminLink');
+      if (!link) return;
+      const { data } = await client.auth.getSession();
+      const token = data.session && data.session.access_token;
+      const res = token ? await fetch('/api/me', { headers: { Authorization: `Bearer ${token}` } }).catch(() => null) : null;
+      const me = res && res.ok ? await res.json().catch(() => ({})) : {};
+      link.hidden = !me.admin;
+    }
 
     const STATUS = {
       pending: 'Awaiting payment', payment_submitted: 'Payment submitted', paid: 'Paid', in_production: 'Being engraved',

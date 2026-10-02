@@ -18,9 +18,9 @@
 // so prices can't be altered. The order is stored in Supabase with the service_role key. Customers
 // then pay with the shop's PayNow QR code and upload proof (pay.html), which you check and mark paid.
 //
-// Admin actions (upload/edit/delete designs, add/remove pages, read messages, manage orders) are
-// allowed from this computer only, unless ADMIN_PASSWORD is set, in which case requests must send
-// it in the X-Admin-Key header.
+// Admin actions (upload/edit/delete designs, add/remove pages, read messages, manage orders) need
+// an admin account: a site account logged in with Supabase whose app_metadata has role "admin"
+// (granted with SQL; see supabase/schema.sql). The admin pages send the account's access token.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -43,7 +43,6 @@ const DB_FILE = path.join(DESIGNS_DIR, 'designs.json');
 const DATA_DIR = path.join(ROOT, '.data');
 const MESSAGES_FILE = path.join(DATA_DIR, 'messages.json');
 const PORT = Number(process.env.PORT) || 3000;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const MAX_BODY = 40 * 1024 * 1024;
 
 const { TYPES: BINDER_TYPES, COLORS: BINDER_COLORS } = require('./public/js/catalog.js');
@@ -124,14 +123,61 @@ function writeDb(db) {
   fs.renameSync(DB_FILE + '.tmp', DB_FILE);
 }
 
-function isAdmin(req) {
-  if (ADMIN_PASSWORD) {
-    const given = Buffer.from(String(req.headers['x-admin-key'] || ''));
-    const want = Buffer.from(ADMIN_PASSWORD);
-    return given.length === want.length && crypto.timingSafeEqual(given, want);
+// ─── Admin access ──────────────────────────────────────────────────────────────────────
+// An admin is a logged-in account with app_metadata.role = "admin" and a confirmed email.
+// Accounts can't change their own app_metadata, so the role can only be given with SQL or the
+// service key. Checks are cached per token for a minute; repeated failures from one address are
+// slowed down.
+const adminCache = new Map(); // token -> { user, expires }
+const failures = new Map(); // address -> { count, since }
+const FAIL_LIMIT = 20;
+const FAIL_WINDOW = 10 * 60 * 1000;
+
+const clientAddress = (req) => String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '';
+
+function tooManyFailures(addr) {
+  const f = failures.get(addr);
+  if (!f) return false;
+  if (Date.now() - f.since > FAIL_WINDOW) {
+    failures.delete(addr);
+    return false;
   }
-  const ip = req.socket.remoteAddress;
-  return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+  return f.count >= FAIL_LIMIT;
+}
+
+function recordFailure(addr) {
+  const f = failures.get(addr);
+  if (!f || Date.now() - f.since > FAIL_WINDOW) failures.set(addr, { count: 1, since: Date.now() });
+  else f.count++;
+}
+
+// The admin making this request, or null after sending a 401 (not logged in), 403 (not an admin)
+// or 429 (too many failed attempts).
+async function requireAdmin(req, res) {
+  const addr = clientAddress(req);
+  const token = (/^Bearer (\S+)$/.exec(req.headers.authorization || '') || [])[1];
+  const cached = token && adminCache.get(token);
+  if (cached && cached.expires > Date.now()) return cached.user; // a verified admin is never blocked
+  if (tooManyFailures(addr)) {
+    sendJson(res, 429, { error: 'Too many attempts. Please wait a few minutes and try again.' });
+    return null;
+  }
+
+  const user = token ? await customerFrom(req) : null;
+  if (!user) {
+    recordFailure(addr);
+    sendJson(res, 401, { error: 'Please log in with an admin account.' });
+    return null;
+  }
+  const isAdmin = user.app_metadata && user.app_metadata.role === 'admin' && user.email_confirmed_at;
+  if (!isAdmin) {
+    recordFailure(addr);
+    sendJson(res, 403, { error: "This account isn't an admin." });
+    return null;
+  }
+  if (adminCache.size > 500) adminCache.clear();
+  adminCache.set(token, { user, expires: Date.now() + 60 * 1000 });
+  return user;
 }
 
 function sendJson(res, status, body) {
@@ -635,14 +681,18 @@ http.createServer(async (req, res) => {
   const { pathname } = new URL(req.url, 'http://localhost');
   try {
     if (pathname === '/api/designs' && req.method === 'POST') {
-      if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
+      if (!(await requireAdmin(req, res))) return;
       return await createDesign(req, res);
+    }
+    if (pathname === '/api/me' && req.method === 'GET') {
+      const user = await customerFrom(req);
+      return sendJson(res, 200, { admin: !!(user && user.app_metadata && user.app_metadata.role === 'admin' && user.email_confirmed_at) });
     }
     if (pathname === '/api/checkout' && req.method === 'POST') return await checkout(req, res);
     const customerMatch = /^\/api\/checkout\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(\/proof)?$/.exec(pathname);
     if (customerMatch && !customerMatch[2] && req.method === 'GET') return await customerOrder(customerMatch[1], req, res);
     if (customerMatch && customerMatch[2] && req.method === 'POST') return await submitProof(customerMatch[1], req, res);
-    if (pathname.startsWith('/api/orders') && !isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
+    if (pathname.startsWith('/api/orders') && !(await requireAdmin(req, res))) return;
     if (pathname === '/api/orders' && req.method === 'GET') return await listOrders(res);
     const uuid = '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})';
     const orderMatch = new RegExp(`^/api/orders/${uuid}$`).exec(pathname);
@@ -652,39 +702,39 @@ http.createServer(async (req, res) => {
     const proofMatch = new RegExp(`^/api/orders/${uuid}/proof$`).exec(pathname);
     if (proofMatch && req.method === 'GET') return await proofLink(proofMatch[1], res);
     if (pathname === '/api/settings' && req.method === 'PATCH') {
-      if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
+      if (!(await requireAdmin(req, res))) return;
       return await updateSettings(req, res);
     }
     if (pathname === '/api/messages' && req.method === 'POST') return await createMessage(req, res);
     if (pathname === '/api/messages' && req.method === 'GET') {
-      if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
+      if (!(await requireAdmin(req, res))) return;
       return sendJson(res, 200, readMessages());
     }
     const msg = /^\/api\/messages\/([a-f0-9-]+)$/.exec(pathname);
     if (msg && req.method === 'DELETE') {
-      if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
+      if (!(await requireAdmin(req, res))) return;
       return deleteMessage(msg[1], res);
     }
     if (pathname === '/api/collections' && req.method === 'POST') {
-      if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
+      if (!(await requireAdmin(req, res))) return;
       return await createCollection(req, res);
     }
     const page = /^\/api\/collections\/([a-z0-9-]+)$/.exec(pathname);
     if (page && req.method === 'DELETE') {
-      if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
+      if (!(await requireAdmin(req, res))) return;
       return deleteCollection(page[1], res);
     }
     if (page && req.method === 'PATCH') {
-      if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
+      if (!(await requireAdmin(req, res))) return;
       return await updateCollection(page[1], req, res);
     }
     const one = /^\/api\/designs\/([a-z0-9-]+)$/.exec(pathname);
     if (one && req.method === 'DELETE') {
-      if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
+      if (!(await requireAdmin(req, res))) return;
       return deleteDesign(one[1], res);
     }
     if (one && req.method === 'PATCH') {
-      if (!isAdmin(req)) return sendJson(res, 403, { error: 'Not allowed' });
+      if (!(await requireAdmin(req, res))) return;
       return await updateDesign(one[1], req, res);
     }
     if (pathname.startsWith('/api/')) return sendJson(res, 404, { error: 'Not found' });

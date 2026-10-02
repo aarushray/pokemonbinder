@@ -2,15 +2,6 @@
 (() => {
   const listEl = document.getElementById('messages');
   const statusEl = document.getElementById('messageStatus');
-  const keyForm = document.getElementById('keyForm');
-  const keyInput = document.getElementById('adminKey');
-
-  // Same password the admin page remembers for this browser tab session.
-  try {
-    keyInput.value = sessionStorage.getItem('admin-key') || '';
-  } catch {
-    // sessionStorage unavailable: the password just won't be remembered.
-  }
 
   function showStatus(msg) {
     statusEl.hidden = !msg;
@@ -18,12 +9,8 @@
   }
 
   async function adminFetch(url, options = {}) {
-    const res = await fetch(url, { ...options, headers: { 'X-Admin-Key': keyInput.value } }).catch(() => null);
+    const res = await AdminAuth.fetch(url, options).catch(() => null);
     if (!res) throw new Error('Could not reach the server. Start it with "npm start".');
-    if (res.status === 403) {
-      keyForm.hidden = false;
-      throw new Error('Not allowed. Enter the admin password.');
-    }
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Request failed.');
     return res.json();
   }
@@ -36,7 +23,6 @@
       return showStatus(err.message);
     }
     showStatus('');
-    keyForm.hidden = true;
     document.getElementById('messageCount').textContent = list.length ? `${list.length} ${list.length === 1 ? 'message' : 'messages'}` : '';
     document.getElementById('noMessages').hidden = list.length > 0;
     listEl.replaceChildren(...list.map(messageItem));
@@ -85,11 +71,5 @@
     return el;
   }
 
-  keyForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    try { sessionStorage.setItem('admin-key', keyInput.value); } catch { /* not remembered */ }
-    load();
-  });
-
-  load();
+  AdminAuth.ready.then(load);
 })();

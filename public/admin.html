@@ -16,11 +16,12 @@
         <a href="admin.html" aria-current="page">Manage designs</a>
         <a href="orders.html" data-right>Orders</a>
         <a href="messages.html" data-right>Messages</a>
+        <a href="#" data-right data-logout>Log out</a>
       </nav>
     </div>
   </header>
 
-  <main class="container">
+  <main class="container admin-gate">
     <div class="intro">
       <h1>Manage designs</h1>
       <p>Upload artwork, choose each binder's type, colour and price, then publish it to the shop.</p>
@@ -71,10 +72,6 @@
             <span>Price (all)</span>
             <input id="price" type="number" min="1" step="0.01" value="64.99" style="width:140px" />
           </label>
-          <label class="field" id="keyField" style="margin:0" hidden>
-            <span>Admin password</span>
-            <input id="adminKey" type="password" autocomplete="current-password" />
-          </label>
           <button id="publishBtn" class="btn" type="button">Publish</button>
         </div>
         <p id="status" class="status" hidden></p>
@@ -92,9 +89,13 @@
 
   </main>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/supabase-client.js"></script>
   <script src="js/catalog.js"></script>
   <script src="js/binder.js"></script>
   <script src="js/common.js"></script>
+  <script src="js/admin-auth.js"></script>
   <script src="js/admin.js"></script>
 </body>
 </html>

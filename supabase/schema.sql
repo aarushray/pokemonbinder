@@ -173,3 +173,19 @@ drop policy if exists "Payment proofs: read own" on storage.objects;
 create policy "Payment proofs: read own" on storage.objects
   for select to authenticated
   using (bucket_id = 'payment-proofs' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ─── Admin accounts ─────────────────────────────────────────────────────────────────────
+-- The admin pages (Manage designs, Orders, Messages) only work for admin accounts: a normal site
+-- account (signed up and email-confirmed) marked with role "admin". Accounts can't give themselves
+-- this role. Run these lines by hand, changing the email:
+--
+-- Make an account an admin:
+--   update auth.users set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"role":"admin"}'
+--   where email = 'admin@example.com';
+--
+-- Remove an admin:
+--   update auth.users set raw_app_meta_data = raw_app_meta_data - 'role'
+--   where email = 'admin@example.com';
+--
+-- List the admins:
+--   select email from auth.users where raw_app_meta_data ->> 'role' = 'admin';

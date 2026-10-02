@@ -459,6 +459,7 @@ a { color: inherit; }
 .field label { display: flex; flex-direction: column; gap: 6px; }
 .tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .tag { font-size: 0.75rem; padding: 2px 8px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); }
+.admin-gate:not(.admin-ok) { visibility: hidden; }
 .status.error { color: #c0392b; }
 
 /* Admin header button (Messages) */

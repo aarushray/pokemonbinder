@@ -4,8 +4,6 @@
   const listEl = document.getElementById('orders');
   const statusEl = document.getElementById('orderStatus');
   const filterEl = document.getElementById('statusFilter');
-  const keyForm = document.getElementById('keyForm');
-  const keyInput = document.getElementById('adminKey');
 
   const STATUS = {
     pending: 'Awaiting payment', payment_submitted: 'Payment submitted', paid: 'Paid', in_production: 'Being engraved',
@@ -13,28 +11,17 @@
   };
   for (const [id, label] of Object.entries(STATUS)) filterEl.add(new Option(label, id));
 
-  // Same password the admin page remembers for this browser tab session.
-  try {
-    keyInput.value = sessionStorage.getItem('admin-key') || '';
-  } catch {
-    // sessionStorage unavailable: the password just won't be remembered.
-  }
-
   function showStatus(msg) {
     statusEl.hidden = !msg;
     statusEl.textContent = msg;
   }
 
   async function adminFetch(url, options = {}) {
-    const res = await fetch(url, {
+    const res = await AdminAuth.fetch(url, {
       ...options,
-      headers: { 'Content-Type': 'application/json', 'X-Admin-Key': keyInput.value },
+      headers: { 'Content-Type': 'application/json' },
     }).catch(() => null);
     if (!res) throw new Error('Could not reach the server. Start it with "npm start".');
-    if (res.status === 403) {
-      keyForm.hidden = false;
-      throw new Error('Not allowed. Enter the admin password.');
-    }
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error || 'Request failed.');
     return body;
@@ -66,7 +53,6 @@
       return showStatus(err.message);
     }
     showStatus('');
-    keyForm.hidden = true;
     render();
   }
 
@@ -183,11 +169,5 @@
   }
 
   filterEl.addEventListener('change', render);
-  keyForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    try { sessionStorage.setItem('admin-key', keyInput.value); } catch { /* not remembered */ }
-    load();
-  });
-
-  load();
+  AdminAuth.ready.then(load);
 })();

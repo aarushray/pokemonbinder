@@ -16,20 +16,17 @@
         <a href="admin.html">Manage designs</a>
         <a href="orders.html" data-right>Orders</a>
         <a href="messages.html" data-right aria-current="page">Messages</a>
+        <a href="#" data-right data-logout>Log out</a>
       </nav>
     </div>
   </header>
 
-  <main class="container">
+  <main class="container admin-gate">
     <div class="intro">
       <h1>Messages</h1>
       <p>Sent from the Contact page, newest first.</p>
     </div>
 
-    <form id="keyForm" class="add-page" hidden>
-      <input id="adminKey" type="password" autocomplete="current-password" placeholder="Admin password" aria-label="Admin password" />
-      <button class="btn" type="submit">Show messages</button>
-    </form>
 
     <div class="section-head">
       <span id="messageCount" class="muted"></span>
@@ -39,9 +36,13 @@
     <p id="messageStatus" class="status error" hidden></p>
   </main>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/supabase-client.js"></script>
   <script src="js/catalog.js"></script>
   <script src="js/binder.js"></script>
   <script src="js/common.js"></script>
+  <script src="js/admin-auth.js"></script>
   <script src="js/messages.js"></script>
 </body>
 </html>
