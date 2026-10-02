@@ -435,10 +435,15 @@ const MAX_QTY = 20;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const badRequest = (msg) => Object.assign(new Error(msg), { status: 400 });
 
+// Shown when this computer's .env has no Supabase secret key (e.g. a fresh clone of the repo).
+const SETUP_ERROR = "Checkout isn't set up on this computer yet: add SUPABASE_SERVICE_ROLE_KEY to the .env file (copy .env.example) and restart the server.";
+
 // The logged-in customer, from the Supabase access token the page sends. Null if not logged in.
+// Throws a 503 if the server has no Supabase key, so that isn't mistaken for being logged out.
 async function customerFrom(req) {
+  if (!SUPABASE_URL || !SUPABASE_SECRET) throw Object.assign(new Error(SETUP_ERROR), { status: 503 });
   const m = /^Bearer (\S+)$/.exec(req.headers.authorization || '');
-  if (!m || !SUPABASE_URL || !SUPABASE_SECRET) return null;
+  if (!m) return null;
   const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${m[1]}` } });
   if (!res.ok) return null;
   const user = await res.json();
@@ -691,4 +696,8 @@ http.createServer(async (req, res) => {
 }).listen(PORT, () => {
   console.log(`Shop:   http://localhost:${PORT}/`);
   console.log(`Admin:  http://localhost:${PORT}/admin.html`);
+  if (!SUPABASE_SECRET) {
+    console.warn('\nWarning: no SUPABASE_SERVICE_ROLE_KEY in .env, so checkout and the admin Orders page won\'t work.');
+    console.warn('Copy .env.example to .env, add the key, and restart the server.\n');
+  }
 });
