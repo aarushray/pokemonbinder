@@ -295,9 +295,82 @@
     return surf;
   }
 
+  // ─── TCGEngrave logo, engraved on the back cover ───────────────────────────────────────
+  // The logo file is black on white; its dark strokes become a mask, trimmed to the logo's edges.
+  // Binder.logoReady resolves once it's loaded (back covers drawn earlier can then be redrawn).
+  const LOGO_OPACITY = 0.6; // how strongly the logo is engraved (1 = as strong as the design)
+  let logoMask = null; // { w, h, alpha: Float32Array }
+  const logoReady = new Promise((resolve) => {
+    if (typeof Image === 'undefined') return resolve(false);
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      const g = c.getContext('2d', { willReadFrequently: true });
+      g.drawImage(img, 0, 0);
+      const px = g.getImageData(0, 0, c.width, c.height).data;
+      const a = new Float32Array(c.width * c.height);
+      let minX = c.width, minY = c.height, maxX = -1, maxY = -1;
+      for (let y = 0; y < c.height; y++) {
+        for (let x = 0; x < c.width; x++) {
+          const i = y * c.width + x;
+          const L = (0.2126 * px[i * 4] + 0.7152 * px[i * 4 + 1] + 0.0722 * px[i * 4 + 2]) / 255;
+          let v = (0.82 - L) / 0.6; // white paper → 0, black ink → 1
+          v = v <= 0 ? 0 : v >= 1 ? 1 : v * v * (3 - 2 * v);
+          a[i] = v;
+          if (v > 0.25) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+      if (maxX < 0) return resolve(false);
+      const w = maxX - minX + 1;
+      const h = maxY - minY + 1;
+      const alpha = new Float32Array(w * h);
+      for (let y = 0; y < h; y++) alpha.set(a.subarray((y + minY) * c.width + minX, (y + minY) * c.width + minX + w), y * w);
+      logoMask = { w, h, alpha };
+      resolve(true);
+    };
+    img.onerror = () => resolve(false);
+    img.src = 'images/tcgengrave-logo.jpg';
+  });
+
+  // The logo in the engraving colour of `base`, `width` px wide (cached per colour and size).
+  const logoCache = new Map();
+  function tintedLogo(base, depth, width) {
+    const key = `${base.join(',')}|${depth}|${width}`;
+    if (logoCache.has(key)) return logoCache.get(key);
+    const height = Math.round((width * logoMask.h) / logoMask.w);
+    // Scale the mask down to size, then colour it.
+    const src = document.createElement('canvas');
+    src.width = logoMask.w;
+    src.height = logoMask.h;
+    const sg = src.getContext('2d');
+    const sd = sg.createImageData(logoMask.w, logoMask.h);
+    for (let i = 0; i < logoMask.alpha.length; i++) sd.data[i * 4 + 3] = Math.round(logoMask.alpha[i] * 255);
+    sg.putImageData(sd, 0, 0);
+    const out = document.createElement('canvas');
+    out.width = width;
+    out.height = height;
+    const og = out.getContext('2d');
+    og.imageSmoothingQuality = 'high';
+    og.drawImage(src, 0, 0, width, height);
+    og.globalCompositeOperation = 'source-in';
+    const { eng } = depthSettings(base, depth);
+    og.fillStyle = rgb(eng);
+    og.fillRect(0, 0, width, height);
+    if (logoCache.size > 40) logoCache.clear();
+    logoCache.set(key, out);
+    return out;
+  }
+
   // Draws the binder (with shadow, on a transparent background) into `canvas`, resizing it.
   // `back: true` draws the back cover: the same binder mirrored left to right (spine on the right),
-  // with no design.
+  // with no design and the TCGEngrave logo engraved in the bottom corner beside the spine.
   function render(canvas, { image = null, color = COLORS[0].id, type = DEFAULT_TYPE, fit = 'cover', invert = false, scale: frameScale = 1, back = false } = {}) {
     if (back) image = null;
     const t = getType(type);
@@ -414,6 +487,20 @@
     ctx.stroke();
     ctx.restore();
 
+    // Back cover: the logo, engraved in the bottom corner next to the spine (drawn unmirrored so
+    // it reads the right way round).
+    if (back && logoMask) {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      const logoW = Math.round(coverW * 0.27);
+      const logo = tintedLogo(base, depth, logoW);
+      const margin = coverW * 0.07;
+      const spineEdge = canvas.width - (x0 + spineW); // the spine fold, on screen (mirrored)
+      ctx.globalAlpha = LOGO_OPACITY;
+      ctx.drawImage(logo, Math.round(spineEdge - inset - margin - logo.width), Math.round(y0 + bh - inset - margin - logo.height));
+      ctx.restore();
+    }
+
     // Crisp outer edge.
     path();
     ctx.lineWidth = Math.max(0.75, 1.5 * scale);
@@ -421,5 +508,5 @@
     ctx.stroke();
   }
 
-  window.Binder = { COLORS, TYPES, DEFAULT_TYPE, getType, typeColors, finishes, finishColors, finishOf, finishExtra, finishLabel, capacity, render, colorName, colorHex };
+  window.Binder = { COLORS, TYPES, DEFAULT_TYPE, getType, typeColors, finishes, finishColors, finishOf, finishExtra, finishLabel, capacity, logoReady, render, colorName, colorHex };
 })();

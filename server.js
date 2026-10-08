@@ -38,9 +38,13 @@ try {
   // No .env file: that's fine until the Orders page is needed.
 }
 const PUBLIC_DIR = path.join(ROOT, 'public');
-const DESIGNS_DIR = path.join(ROOT, 'designs');
+// Where designs and messages are saved. Locally that's the project folder; on a host whose normal
+// disk is wiped on every deploy (e.g. Render), set STORAGE_DIR to a persistent disk (/var/data).
+const STORAGE_DIR = process.env.STORAGE_DIR ? path.resolve(process.env.STORAGE_DIR) : '';
+const REPO_DESIGNS_DIR = path.join(ROOT, 'designs');
+const DESIGNS_DIR = STORAGE_DIR ? path.join(STORAGE_DIR, 'designs') : REPO_DESIGNS_DIR;
 const DB_FILE = path.join(DESIGNS_DIR, 'designs.json');
-const DATA_DIR = path.join(ROOT, '.data');
+const DATA_DIR = STORAGE_DIR ? path.join(STORAGE_DIR, '.data') : path.join(ROOT, '.data');
 const MESSAGES_FILE = path.join(DATA_DIR, 'messages.json');
 const PORT = Number(process.env.PORT) || 3000;
 const MAX_BODY = 40 * 1024 * 1024;
@@ -133,7 +137,9 @@ const failures = new Map(); // address -> { count, since }
 const FAIL_LIMIT = 20;
 const FAIL_WINDOW = 10 * 60 * 1000;
 
-const clientAddress = (req) => String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '';
+// Behind a hosting proxy the visitor's address is the last X-Forwarded-For entry (added by the
+// proxy); earlier entries can be faked by the visitor.
+const clientAddress = (req) => String(req.headers['x-forwarded-for'] || '').split(',').pop().trim() || req.socket.remoteAddress || '';
 
 function tooManyFailures(addr) {
   const f = failures.get(addr);
@@ -306,7 +312,7 @@ async function updateDesign(id, req, res) {
   if (body.thumb) {
     const thumb = saveDataUrl(body.thumb, `${id}-thumb`);
     if (thumb !== design.thumb) {
-      const old = path.join(ROOT, design.thumb);
+      const old = path.join(DESIGNS_DIR, path.basename(design.thumb));
       if (path.dirname(old) === DESIGNS_DIR) fs.rmSync(old, { force: true });
     }
     design.thumb = thumb;
@@ -365,7 +371,7 @@ function deleteDesign(id, res) {
   const design = db.designs.find((d) => d.id === id);
   if (!design) return sendJson(res, 404, { error: 'Design not found' });
   for (const rel of [design.art, design.thumb]) {
-    const file = path.join(ROOT, rel);
+    const file = path.join(DESIGNS_DIR, path.basename(rel));
     if (path.dirname(file) === DESIGNS_DIR) fs.rmSync(file, { force: true });
   }
   db.designs = db.designs.filter((d) => d.id !== id);
@@ -522,7 +528,7 @@ function priceLine(item, user, db) {
     return {
       name: 'Custom design', binder_type: type.name, color, color_name: colorName(color),
       unit_price: price, original_price: price, discount_percent: 0, qty,
-      custom: true, texture: finish ? finish.name : 'Diamond texture', art_path: artPath,
+      custom: true, texture: finish ? finish.name : 'PU Leather', art_path: artPath,
     };
   }
 
@@ -673,12 +679,23 @@ function serveStatic(req, res, pathname) {
   });
 }
 
+// First start with a persistent disk: copy the designs from the repo onto it once. After that the
+// disk is the source of truth (designs uploaded on the live site are saved there, not in git).
+if (STORAGE_DIR && !fs.existsSync(DB_FILE) && fs.existsSync(path.join(REPO_DESIGNS_DIR, 'designs.json'))) {
+  fs.cpSync(REPO_DESIGNS_DIR, DESIGNS_DIR, { recursive: true });
+  console.log(`Copied the designs from the repo to ${DESIGNS_DIR}`);
+}
 fs.mkdirSync(DESIGNS_DIR, { recursive: true });
 if (!fs.existsSync(DB_FILE)) writeDb({ designs: [], collections: DEFAULT_COLLECTIONS });
 migrate();
 
 http.createServer(async (req, res) => {
   const { pathname } = new URL(req.url, 'http://localhost');
+  // Basic security headers on every response.
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-Frame-Options', 'DENY');
+  if (req.headers['x-forwarded-proto'] === 'https') res.setHeader('Strict-Transport-Security', 'max-age=31536000');
   try {
     if (pathname === '/api/designs' && req.method === 'POST') {
       if (!(await requireAdmin(req, res))) return;

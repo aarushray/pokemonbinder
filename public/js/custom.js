@@ -46,7 +46,7 @@ function setType(id) {
   // Every other binder only comes in the diamond texture, shown as a fixed label.
   // Both show how many pockets the binder holds in that texture.
   document.getElementById('finishFixed').hidden = !!list;
-  document.querySelector('#finishFixed .fixed-value').textContent = `Diamond texture — ${Binder.capacity(id)} pockets`;
+  document.querySelector('#finishFixed .fixed-value').textContent = `PU Leather — ${Binder.capacity(id)} pockets`;
   state.finish = list ? Binder.finishOf(id, state.color) : null;
   if (list) finishSelect.replaceChildren(...list.map((f) => new Option(Binder.finishLabel(f, Binder.capacity(id, f.id)), f.id, false, f.id === state.finish)));
   showPrices();
@@ -173,7 +173,7 @@ function showBuy() {
   const t = Binder.getType(state.type);
   const finish = (Binder.finishes(t.id) || []).find((f) => f.id === Binder.finishOf(t.id, state.color));
   document.getElementById('buySummary').textContent =
-    `${t.name} · ${finish ? finish.name : 'Diamond texture'} · ${Binder.colorName(state.color)}`;
+    `${t.name} · ${finish ? finish.name : 'PU Leather'} · ${Binder.colorName(state.color)}`;
   document.getElementById('buyPrice').textContent = Shop.money(Shop.customPrice({ type: t.id, color: state.color }) * qty);
   addBtn.disabled = !state.file;
   const prompt = 'Upload your design (step 3) to add it to your cart.';

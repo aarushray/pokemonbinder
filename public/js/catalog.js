@@ -40,7 +40,7 @@
       shape: { spine: 50, radius: 80, tab: false, display: 0.88 } },
     { id: '9-pocket', name: '9-slots', pockets: 9, capacity: 360, basePrice: 80, ratio: [2, 3], colors: [...DIAMOND, ...VELVET],
       finishes: [
-        { id: 'diamond', name: 'Diamond texture', colors: DIAMOND },
+        { id: 'diamond', name: 'PU Leather', colors: DIAMOND },
         { id: 'velvet', name: 'Velvet texture', colors: VELVET, cards: 540, extraPrice: 5 },
       ],
       shape: { spine: 36, radius: 72, tab: false } },

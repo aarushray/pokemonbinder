@@ -494,6 +494,12 @@ const Shop = (() => {
     });
 
     show(0);
+    // The logo on the back cover loads separately; redraw the back once it's ready.
+    Binder.logoReady.then((ok) => {
+      if (!ok) return;
+      backDrawn = false;
+      if (index === 1) drawBack();
+    });
     return {
       show,
       setBinder(type, color) {
