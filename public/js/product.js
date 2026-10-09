@@ -30,7 +30,10 @@
   const colorName = document.getElementById('colorName');
   // The home page passes the colour picked on the card, if any.
   const requested = new URLSearchParams(location.search).get('color');
-  let color = colors.some((c) => c.id === requested) ? requested : design.color;
+  const unavailable = Shop.unavailableFor(type.id);
+  const firstOpen = (colors.find((c) => !unavailable.includes(c.id)) || colors[0]).id;
+  let color = colors.some((c) => c.id === requested) && !unavailable.includes(requested) ? requested
+    : !unavailable.includes(design.color) ? design.color : firstOpen;
   let art = null;
 
   const slides = Shop.coverSlides(canvas);
@@ -43,16 +46,6 @@
   }
 
   const swatchesEl = document.getElementById('swatches');
-
-  // Colour wheel after the preset swatches: any custom binder colour (woven texture only).
-  const wheel = document.createElement('label');
-  wheel.className = 'swatch swatch-wheel';
-  wheel.title = 'Custom colour';
-  const picker = document.createElement('input');
-  picker.type = 'color';
-  picker.value = Binder.colorHex(color);
-  picker.setAttribute('aria-label', 'Custom binder colour');
-  wheel.appendChild(picker);
 
   // Binders with texture choices (the 9-pocket) get a dropdown that limits the colours shown.
   const finishes = Binder.finishes(type.id);
@@ -74,7 +67,13 @@
   // Every other binder only comes in the diamond texture, shown as a fixed label.
   document.getElementById('finishFixed').hidden = !!finishes;
   if (finishes) {
-    finishSelect.replaceChildren(...finishes.map((f) => new Option(Binder.finishLabel(f), f.id, false, f.id === finish)));
+    // A material is greyed out when none of its colours are available for this design.
+    finishSelect.replaceChildren(...finishes.map((f) => {
+      const none = f.colors.every((c) => unavailable.includes(c));
+      const opt = new Option(none ? `${Binder.finishLabel(f)} (not available)` : Binder.finishLabel(f), f.id, false, f.id === finish);
+      opt.disabled = none;
+      return opt;
+    }));
     finishSelect.addEventListener('change', () => {
       finish = finishSelect.value;
       showCards();
@@ -90,34 +89,16 @@
 
   function showSwatches() {
     const list = Binder.finishColors(type.id, finish);
-    if (!list.some((c) => c.id === color)) {
-      color = list.some((c) => c.id === design.color) ? design.color : list[0].id;
+    const open = list.filter((c) => !unavailable.includes(c.id));
+    if (!open.some((c) => c.id === color)) {
+      color = open.some((c) => c.id === design.color) ? design.color : (open[0] || list[0]).id;
     }
     Shop.swatches(swatchesEl, list, color, (id) => {
       color = id;
-      wheel.style.removeProperty('--pick');
       draw();
-    });
-    wheel.setAttribute('aria-checked', 'false');
-    wheel.style.removeProperty('--pick');
-    if (list.every((c) => !c.texture)) swatchesEl.appendChild(wheel);
+    }, unavailable);
   }
   showSwatches();
-
-  let pending = false;
-  picker.addEventListener('input', () => {
-    for (const el of swatchesEl.children) el.setAttribute('aria-checked', String(el === wheel));
-    color = picker.value;
-    wheel.style.setProperty('--pick', color);
-    colorName.textContent = Binder.colorName(color);
-    slides.setBinder(type.id, color);
-    if (pending || !art) return;
-    pending = true; // dragging in the picker fires many events; render at most once per frame
-    requestAnimationFrame(() => {
-      pending = false;
-      draw();
-    });
-  });
 
   // Show the pre-rendered thumbnail instantly, then the full-resolution render once the art loads.
   // (The thumbnail is in the design's default colour, so skip it when another colour was requested.)

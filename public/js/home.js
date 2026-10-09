@@ -83,7 +83,7 @@
       Binder.render(canvas, { image, color: hex, type: type.id, scale: 0.5 });
       img.hidden = true;
       canvas.hidden = false;
-    });
+    }, Shop.unavailableFor(type.id));
 
     card.append(link, swatches);
     cards.push({ el: card, design: d, subs: new Set((d.subclasses || []).map(Shop.normTag)) });

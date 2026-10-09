@@ -619,6 +619,70 @@
   window.addEventListener('drop', (e) => e.preventDefault());
   publishBtn.addEventListener('click', publish);
 
+  // ---- Colour availability: for each binder size, cross out the colours not in stock ----
+  // Saved straight away; customers see those colours crossed out on every design of that size and on
+  // Custom Designs, and can't order them.
+  const stockEl = document.getElementById('stock');
+  const stockStatus = document.getElementById('stockStatus');
+  let stock = {};
+  const showStockStatus = (msg, isError) => {
+    stockStatus.hidden = !msg;
+    stockStatus.textContent = msg;
+    stockStatus.classList.toggle('error', !!isError);
+  };
+
+  function renderStock() {
+    stockEl.replaceChildren(...Binder.TYPES.map((t) => {
+      const row = document.createElement('div');
+      row.className = 'stock-row';
+      const name = document.createElement('span');
+      name.className = 'stock-name';
+      const off = stock[t.id] || [];
+      name.textContent = off.length ? `${t.name} · ${off.length} out of stock` : t.name;
+      const swatchesRow = document.createElement('div');
+      swatchesRow.className = 'swatches avail-picker';
+      for (const c of Binder.typeColors(t.id)) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'swatch';
+        b.style.setProperty('--c', c.hex);
+        if (c.texture === 'felt') b.classList.add('swatch-felt');
+        const isOff = off.includes(c.id);
+        b.classList.toggle('swatch-off', isOff);
+        b.setAttribute('role', 'checkbox');
+        b.setAttribute('aria-checked', String(!isOff));
+        b.setAttribute('aria-label', `${t.name} ${c.name}`);
+        b.title = isOff ? `${c.name}: out of stock (click to make available)` : `${c.name}: in stock (click to cross out)`;
+        b.addEventListener('click', () => saveStock(t.id, c.id, !isOff));
+        swatchesRow.appendChild(b);
+      }
+      row.append(name, swatchesRow);
+      return row;
+    }));
+  }
+
+  async function saveStock(typeId, colorId, crossOut) {
+    const next = { ...stock, [typeId]: crossOut ? [...(stock[typeId] || []), colorId] : (stock[typeId] || []).filter((c) => c !== colorId) };
+    try {
+      const saved = await adminFetch('/api/stock', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unavailable: next }),
+      });
+      stock = saved.unavailable;
+      const t = Binder.getType(typeId);
+      showStockStatus(`${t.name} ${Binder.colorName(colorId)} is now ${crossOut ? 'out of stock' : 'in stock'}.`);
+    } catch (err) {
+      showStockStatus(err.message, true);
+    }
+    renderStock();
+  }
+
+  Shop.loadCatalog().then(({ settings }) => {
+    stock = settings.unavailable || {};
+    renderStock();
+  }).catch(() => {});
+
   // While a storewide discount is on, binders can't have their own: every per-binder discount
   // field is emptied and disabled. They unlock when the storewide discount goes back to 0.
   let storeDiscountOn = false;

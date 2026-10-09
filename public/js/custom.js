@@ -48,7 +48,16 @@ function setType(id) {
   document.getElementById('finishFixed').hidden = !!list;
   document.querySelector('#finishFixed .fixed-value').textContent = `PU Leather — ${Binder.capacity(id)} pockets`;
   state.finish = list ? Binder.finishOf(id, state.color) : null;
-  if (list) finishSelect.replaceChildren(...list.map((f) => new Option(Binder.finishLabel(f, Binder.capacity(id, f.id)), f.id, false, f.id === state.finish)));
+  if (list) {
+    // A material is greyed out when every one of its colours is out of stock for this binder.
+    const off = Shop.unavailableFor(id);
+    finishSelect.replaceChildren(...list.map((f) => {
+      const none = f.colors.every((c) => off.includes(c));
+      const opt = new Option(Binder.finishLabel(f, Binder.capacity(id, f.id)) + (none ? ' (out of stock)' : ''), f.id, false, f.id === state.finish);
+      opt.disabled = none;
+      return opt;
+    }));
+  }
   showPrices();
   showImageInfo();
   showColors();
@@ -58,10 +67,49 @@ function setType(id) {
 // offered, otherwise picks the first one.
 function showColors() {
   const colors = Binder.finishColors(state.type, state.finish);
-  const color = colors.some((c) => c.id === state.color) ? state.color : colors[0].id;
-  Shop.swatches(document.getElementById('swatches'), colors, color, setColor);
+  const off = Shop.unavailableFor(state.type);
+  const open = colors.filter((c) => !off.includes(c.id));
+  const color = open.some((c) => c.id === state.color) ? state.color : (open[0] || colors[0]).id;
+  const swatchesEl = document.getElementById('swatches');
+  Shop.swatches(swatchesEl, colors, color, (id) => {
+    wheel.style.removeProperty('--pick');
+    setColor(id);
+  }, off);
+  // Admins also get a colour wheel to try out colours that aren't sold yet (PU leather only).
+  wheel.setAttribute('aria-checked', 'false');
+  wheel.style.removeProperty('--pick');
+  if (isAdmin && colors.every((c) => !c.texture)) swatchesEl.appendChild(wheel);
   setColor(color);
 }
+
+// ---- Admin-only colour wheel ----
+// Shown only when the logged-in account is an admin (the server decides). Colours picked with it
+// are previews: they can't be added to the cart.
+let isAdmin = false;
+const wheel = document.createElement('label');
+wheel.className = 'swatch swatch-wheel';
+wheel.title = 'Try any colour (admin only)';
+const picker = document.createElement('input');
+picker.type = 'color';
+picker.value = '#888888';
+picker.setAttribute('aria-label', 'Try any binder colour (admin only)');
+wheel.appendChild(picker);
+picker.addEventListener('input', () => {
+  for (const el of document.getElementById('swatches').children) el.setAttribute('aria-checked', String(el === wheel));
+  wheel.style.setProperty('--pick', picker.value);
+  setColor(picker.value);
+});
+
+(async () => {
+  const user = window.Account && (await Account.currentUser().catch(() => null));
+  if (!user) return;
+  const { data } = await Account.client.auth.getSession();
+  const res = await fetch('/api/me', { headers: { Authorization: `Bearer ${data.session && data.session.access_token}` } }).catch(() => null);
+  const me = res && res.ok ? await res.json().catch(() => ({})) : {};
+  if (!me.admin) return;
+  isAdmin = true;
+  showColors();
+})();
 
 const finishField = document.getElementById('finishField');
 const finishSelect = document.getElementById('finish');
@@ -175,9 +223,18 @@ function showBuy() {
   document.getElementById('buySummary').textContent =
     `${t.name} · ${finish ? finish.name : 'PU Leather'} · ${Binder.colorName(state.color)}`;
   document.getElementById('buyPrice').textContent = Shop.money(Shop.customPrice({ type: t.id, color: state.color }) * qty);
-  addBtn.disabled = !state.file;
+  // A colour from the admin colour wheel is a preview only, not something customers can order.
+  const preview = !Binder.COLORS.some((c) => c.id === state.color) || Shop.unavailableFor(state.type).includes(state.color);
+  addBtn.disabled = !state.file || preview;
   const prompt = 'Upload your design (step 3) to add it to your cart.';
-  if (!state.file) {
+  const previewNote = 'Colour-wheel colours are a preview for admins only and can\'t be added to the cart. Pick a listed colour to order.';
+  if (preview) {
+    buyNote.textContent = previewNote;
+    buyNote.hidden = false;
+  } else if (buyNote.textContent === previewNote) {
+    buyNote.hidden = !!state.file;
+    if (!state.file) buyNote.textContent = prompt;
+  } else if (!state.file) {
     buyNote.textContent = prompt;
     buyNote.hidden = false;
   } else if (buyNote.textContent === prompt) {
@@ -195,7 +252,7 @@ document.getElementById('minus').addEventListener('click', () => setQty(qty - 1)
 document.getElementById('plus').addEventListener('click', () => setQty(qty + 1));
 
 addBtn.addEventListener('click', async () => {
-  if (!state.file) return;
+  if (!state.file || !Binder.COLORS.some((c) => c.id === state.color)) return;
   if (state.file.size > MAX_ART_BYTES) {
     buyNote.textContent = 'This image is over 25 MB. Please upload a smaller file.';
     buyNote.hidden = false;
@@ -222,4 +279,6 @@ addBtn.addEventListener('click', async () => {
 });
 
 // Start with a blank binder; the design appears once one is uploaded (or the sample is chosen).
+// The stock list comes with the catalogue; redraw the options once it has loaded.
+Shop.loadCatalog().then(() => setType(state.type)).catch(() => {});
 setType(state.type);

@@ -286,6 +286,29 @@ a { color: inherit; }
     radial-gradient(circle at 75% 25%, rgba(0, 0, 0, 0.12), transparent 35%),
     var(--c);
 }
+/* Colours not available yet: greyed out with a diagonal line through them. */
+.swatch { position: relative; }
+.swatch-off { opacity: 0.35; filter: grayscale(0.6); cursor: not-allowed; }
+.swatch-off::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: var(--text);
+  transform: translateX(-50%) rotate(45deg);
+  border-radius: 1px;
+}
+/* Admin colour availability panel: crossed-out swatches stay clickable. */
+.avail-picker .swatch-off { cursor: pointer; }
+.avail-picker .swatch[aria-checked="true"] { outline: none; }
+.stock-panel { margin-bottom: 24px; }
+.stock-panel .note { margin: 0 0 14px; }
+.stock-list { display: flex; flex-direction: column; }
+.stock-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 24px; padding: 12px 0; border-top: 1px solid var(--border); }
+.stock-name { min-width: 220px; font-size: 0.92rem; font-weight: 500; }
+
 /* Colour wheel swatch: rainbow ring, with the picked colour shown in the centre once chosen. */
 .swatch-wheel {
   position: relative;

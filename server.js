@@ -4,7 +4,8 @@
 // designs/ are served, so this file, package.json and .data/ never are.
 //
 // Data lives in designs/designs.json: { designs: [...], collections: [{ id, name, subclasses }],
-// settings: { storeDiscount, bannerText } }. Discounts are whole percentages (0 = none).
+// settings: { storeDiscount, bannerText, unavailable } }. Discounts are whole percentages (0 = none).
+// settings.unavailable lists, per binder type, the colours not in stock: { '9-pocket': ['#395143'] }.
 // Collections are the shop's pages. Each design belongs to one page (`page`, a collection id) and
 // may be tagged with some of that page's subclasses (`subclasses`), which the shop uses as filters.
 //
@@ -91,6 +92,7 @@ function readDb() {
   if (!db.settings || typeof db.settings !== 'object') db.settings = {};
   if (!Number.isInteger(db.settings.storeDiscount)) db.settings.storeDiscount = 0;
   if (typeof db.settings.bannerText !== 'string') db.settings.bannerText = '';
+  db.settings.unavailable = cleanStock(db.settings.unavailable);
   return db;
 }
 
@@ -266,6 +268,28 @@ async function updateSettings(req, res) {
   sendJson(res, 200, db.settings);
 }
 
+// Colour stock: { typeId: [colour ids not in stock] }, keeping only real types and their colours.
+function cleanStock(input) {
+  const out = {};
+  for (const t of BINDER_TYPES) {
+    const list = input && Array.isArray(input[t.id]) ? input[t.id].map(String) : [];
+    const off = [...new Set(list)].filter((c) => t.colors.includes(c));
+    if (off.length) out[t.id] = off;
+  }
+  return out;
+}
+
+const outOfStock = (db, type, color) => (db.settings.unavailable[type.id] || []).includes(color);
+
+// PATCH /api/stock { unavailable: { typeId: [colour ids] } } (admin): which colours are out of stock.
+async function updateStock(req, res) {
+  const body = JSON.parse(await readBody(req, 64 * 1024));
+  const db = readDb();
+  db.settings.unavailable = cleanStock(body.unavailable);
+  writeDb(db);
+  sendJson(res, 200, { unavailable: db.settings.unavailable });
+}
+
 // A list (or comma-separated string) of short labels, trimmed, without duplicates.
 function cleanNames(input) {
   const list = Array.isArray(input) ? input : String(input || '').split(',');
@@ -319,6 +343,7 @@ async function updateDesign(id, req, res) {
   }
   Object.assign(design, fields, { updatedAt: new Date().toISOString() });
   delete design.genre;
+  delete design.unavailable;
   delete design.tags;
   writeDb(db);
   sendJson(res, 200, design);
@@ -521,6 +546,7 @@ function priceLine(item, user, db) {
     const type = BINDER_TYPES.find((t) => t.id === item.type);
     if (!type) throw badRequest('A custom design in your cart uses a binder type we no longer sell. Please remove it.');
     if (!type.colors.includes(color)) throw badRequest('A custom design in your cart has an unknown colour.');
+    if (outOfStock(db, type, color)) throw badRequest(`${type.name} binders in ${colorName(color)} are out of stock. Please choose another colour for your custom design.`);
     const artPath = String(item.art_path || '');
     if (!artPath.startsWith(`${user.id}/`) || artPath.includes('..')) throw badRequest('The artwork for a custom design is missing. Please remove it and add it again.');
     const finish = finishOf(type, color);
@@ -538,6 +564,7 @@ function priceLine(item, user, db) {
   if (!design) throw badRequest('Something in your cart is no longer sold. Please refresh the cart page.');
   const type = BINDER_TYPES.find((t) => t.id === design.type) || BINDER_TYPES.find((t) => t.id === '9-pocket');
   if (!type.colors.includes(color)) throw badRequest(`"${design.name}" isn't available in that colour.`);
+  if (outOfStock(db, type, color)) throw badRequest(`${type.name} binders in ${colorName(color)} are out of stock. Please choose another colour.`);
   const finish = finishOf(type, color);
   const original = design.price + ((finish && finish.extraPrice) || 0);
   const discount = db.settings.storeDiscount > 0 ? db.settings.storeDiscount : design.discount || 0;
@@ -718,6 +745,10 @@ http.createServer(async (req, res) => {
     if (artMatch && req.method === 'GET') return await artDownload(artMatch[1], Number(artMatch[2]), res);
     const proofMatch = new RegExp(`^/api/orders/${uuid}/proof$`).exec(pathname);
     if (proofMatch && req.method === 'GET') return await proofLink(proofMatch[1], res);
+    if (pathname === '/api/stock' && req.method === 'PATCH') {
+      if (!(await requireAdmin(req, res))) return;
+      return await updateStock(req, res);
+    }
     if (pathname === '/api/settings' && req.method === 'PATCH') {
       if (!(await requireAdmin(req, res))) return;
       return await updateSettings(req, res);

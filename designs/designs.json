@@ -14,7 +14,12 @@
       "discount": 0,
       "art": "designs/sabo-f7d2e5-art.jpg",
       "thumb": "designs/sabo-f7d2e5-thumb.webp",
-      "createdAt": "2026-10-02T06:48:31.120Z"
+      "createdAt": "2026-10-02T06:48:31.120Z",
+      "unavailable": [
+        "#fbcb46",
+        "#395143"
+      ],
+      "updatedAt": "2026-10-09T03:38:38.199Z"
     },
     {
       "id": "ace-2bedb3",
@@ -210,6 +215,17 @@
   ],
   "settings": {
     "storeDiscount": 0,
-    "bannerText": "Christmas Sale: 20% off all binders"
+    "bannerText": "Christmas Sale: 20% off all binders",
+    "unavailable": {
+      "4-pocket": [
+        "#e87a79",
+        "#614875",
+        "#fbcb46"
+      ],
+      "9-pocket": [
+        "#445479",
+        "#e87a79"
+      ]
+    }
   }
 }

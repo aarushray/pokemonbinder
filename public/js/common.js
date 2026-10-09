@@ -121,6 +121,9 @@ const Shop = (() => {
   // Pass fresh = true after changing them (admin page).
   let catalogPromise = null;
   let storeDiscount = 0; // percent, from the admin page (set when the catalogue loads)
+  let stock = {}; // { typeId: [colour ids out of stock] }, from the admin page
+  // Colours of a binder type that are out of stock (shown crossed out, can't be ordered).
+  const unavailableFor = (typeId) => stock[typeId] || [];
 
   function loadCatalog(fresh = false) {
     if (fresh || !catalogPromise) {
@@ -129,7 +132,8 @@ const Shop = (() => {
         const db = await res.json();
         storeDiscount = Number(db.settings && db.settings.storeDiscount) || 0;
         const bannerText = (db.settings && db.settings.bannerText) || '';
-        return { designs: db.designs || [], collections: db.collections || [], settings: { storeDiscount, bannerText } };
+        stock = (db.settings && db.settings.unavailable) || {};
+        return { designs: db.designs || [], collections: db.collections || [], settings: { storeDiscount, bannerText, unavailable: stock } };
       });
       catalogPromise.catch(() => { catalogPromise = null; });
     }
@@ -196,7 +200,9 @@ const Shop = (() => {
   const thumbUrl = (d) => (d.updatedAt ? `${d.thumb}?v=${encodeURIComponent(d.updatedAt)}` : d.thumb);
 
   // Colour swatch radio buttons for `colors` (COLORS entries); calls onPick(id) when one is chosen.
-  function swatches(container, colors, selected, onPick) {
+  // Colours in `unavailable` are shown greyed out and crossed out, and can't be chosen.
+  function swatches(container, colors, selected, onPick, unavailable = []) {
+    const off = new Set(unavailable);
     container.replaceChildren();
     for (const c of colors) {
       const b = document.createElement('button');
@@ -209,6 +215,14 @@ const Shop = (() => {
       b.setAttribute('role', 'radio');
       b.setAttribute('aria-label', c.name);
       b.setAttribute('aria-checked', String(c.id === selected));
+      if (off.has(c.id)) {
+        b.classList.add('swatch-off');
+        b.disabled = true;
+        b.title = `${c.name} (out of stock)`;
+        b.setAttribute('aria-label', `${c.name}, out of stock`);
+        container.appendChild(b);
+        continue;
+      }
       b.addEventListener('click', () => {
         for (const el of container.children) el.setAttribute('aria-checked', String(el === b));
         onPick(c.id);
@@ -552,7 +566,7 @@ const Shop = (() => {
   pageSwitcher();
 
   return {
-    defaultBanner, saleBanner, coverSlides, isCustom, customPrice, addCustomToCart, customArtIds, priceFor, discountFor, sale, renderPrice, readCart, addToCart, setQty, clearCart, stashCart, restoreCart, pruneCart, loadDesigns, loadImage, money, thumbUrl, swatches, designType,
+    unavailableFor, defaultBanner, saleBanner, coverSlides, isCustom, customPrice, addCustomToCart, customArtIds, priceFor, discountFor, sale, renderPrice, readCart, addToCart, setQty, clearCart, stashCart, restoreCart, pruneCart, loadDesigns, loadImage, money, thumbUrl, swatches, designType,
     loadCatalog, normTag, pageOf, currentPage, setPage,
   };
 })();
