@@ -30,6 +30,7 @@
   // finishes (optional): texture choices shown as a dropdown, each limited to some of the colours.
   // A finish with `cards` always holds that many cards, overriding the design's own capacity.
   // `extraPrice` is added to the binder's base price on the Custom Designs page.
+  // courierOnly (optional): too big for tracked mailing, so orders with it go by courier.
   // shape: mockup geometry relative to a 1000px-wide cover. `height` (optional) scales the cover's
   // height from the art ratio; the art is then cropped top and bottom to fit. `display` (optional)
   // draws the binder that much smaller than the 9-pocket, centred in a 9-pocket-sized picture.
@@ -44,16 +45,28 @@
         { id: 'velvet', name: 'Velvet texture', colors: VELVET, cards: 540, extraPrice: 5 },
       ],
       shape: { spine: 36, radius: 72, tab: false } },
-    { id: '9-pocket-toploader', name: '9-slots toploader', pockets: 9, capacity: 252, basePrice: 100, ratio: [4, 5], colors: DIAMOND,
+    { id: '9-pocket-toploader', name: '9-slots toploader', pockets: 9, capacity: 252, basePrice: 100, ratio: [4, 5], colors: DIAMOND, courierOnly: true,
       shape: { spine: 60, radius: 72, tab: false } },
-    { id: '12-pocket', name: '12-slots', pockets: 12, capacity: 480, basePrice: 90, ratio: [4, 5], colors: DIAMOND,
+    { id: '12-pocket', name: '12-slots', pockets: 12, capacity: 480, basePrice: 90, ratio: [4, 5], colors: DIAMOND, courierOnly: true,
       shape: { spine: 75, radius: 60, tab: false } },
   ];
   const DEFAULT_TYPE = '9-pocket';
 
+  // Delivery choices at checkout: one fee per order (SGD). A cart with any courierOnly binder type
+  // (too big to mail) can only go by courier; otherwise the customer picks.
+  const SHIPPING = [
+    { id: 'mail', name: 'Tracked mailing', price: 3 },
+    { id: 'courier', name: 'Courier', price: 6 },
+  ];
+  // The delivery choices for a cart holding these binder type ids.
+  function shippingOptions(typeIds) {
+    const courierOnly = typeIds.some((id) => (TYPES.find((t) => t.id === id) || {}).courierOnly);
+    return courierOnly ? SHIPPING.filter((s) => s.id === 'courier') : SHIPPING;
+  }
+
   // The shop's pages (Pokémon, One Piece, ...) are managed on the admin page and stored with the
   // designs in designs/designs.json, not here.
-  const catalog = { COLORS, DEFAULT_DEPTH, TYPES, DEFAULT_TYPE };
+  const catalog = { COLORS, DEFAULT_DEPTH, TYPES, DEFAULT_TYPE, SHIPPING, shippingOptions };
   if (typeof module !== 'undefined' && module.exports) module.exports = catalog;
   else root.Catalog = catalog;
 })(this);

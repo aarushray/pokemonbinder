@@ -41,7 +41,7 @@
 
   function draw() {
     colorName.textContent = Binder.colorName(color);
-    slides.setBinder(type.id, color);
+    slides.setBinder(type.id, color, { image: art });
     Binder.render(canvas, { image: art, color, type: type.id });
   }
 

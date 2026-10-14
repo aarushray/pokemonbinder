@@ -308,6 +308,16 @@ a { color: inherit; }
 .stock-list { display: flex; flex-direction: column; }
 .stock-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 24px; padding: 12px 0; border-top: 1px solid var(--border); }
 .stock-name { min-width: 220px; font-size: 0.92rem; font-weight: 500; }
+.inventory-scroll { overflow-x: auto; }
+.inventory-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.inventory-table th, .inventory-table td { padding: 8px 6px; border-top: 1px solid var(--border); text-align: center; }
+.inventory-table thead th { border-top: 0; font-weight: 500; color: var(--muted); font-size: 0.75rem; vertical-align: bottom; }
+.inventory-table thead th > span:last-child { display: block; margin-top: 4px; white-space: nowrap; }
+.inventory-table tbody th { text-align: left; font-weight: 500; white-space: nowrap; padding-right: 16px; }
+.inventory-dot { display: inline-block; width: 18px; height: 18px; cursor: default; }
+.inventory-table input { width: 58px; padding: 6px; text-align: center; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+.inventory-table input.inventory-zero { color: #b82e40; border-color: #b82e40; font-weight: 600; }
+.inventory-na { color: var(--muted); }
 
 /* Colour wheel swatch: rainbow ring, with the picked colour shown in the centre once chosen. */
 .swatch-wheel {
@@ -605,6 +615,14 @@ input.own-discount:disabled { background: var(--surface); color: var(--muted); c
 .cart-main { min-width: 0; }
 .checkout-details { margin-top: 32px; }
 .checkout-details h2 { font-size: 1rem; font-weight: 600; margin: 0 0 4px; }
+.shipping-pick { border: 0; padding: 0; margin: 12px 0 0; min-width: 0; }
+.shipping-pick legend { font-size: 1rem; font-weight: 600; padding: 0; margin-bottom: 8px; }
+.shipping-pick .note { margin: 8px 0 0; }
+.shipping-options { display: flex; flex-direction: column; gap: 8px; }
+.shipping-option { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; }
+.shipping-option:has(input:checked) { border-color: var(--text); }
+.shipping-option input { margin: 0; width: auto; accent-color: var(--text); }
+.shipping-price { margin-left: auto; font-weight: 500; }
 .contact-pick { display: grid; grid-template-columns: 140px 1fr; gap: 12px; }
 .details-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .contact-pick select {

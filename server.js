@@ -10,7 +10,8 @@
 // may be tagged with some of that page's subclasses (`subclasses`), which the shop uses as filters.
 //
 // Contact-form messages are saved in .data/messages.json. The dot folder is never served to
-// browsers and is ignored by git, so customers' details stay on this computer.
+// browsers and is ignored by git, so customers' details stay on this computer. Stock counts typed on
+// the admin page are kept there too, in .data/inventory.json.
 //
 // Customer orders live in Supabase. The admin Orders page reads them through this server using the
 // Supabase secret (service_role) key from the git-ignored .env file; that key never reaches a browser.
@@ -47,10 +48,11 @@ const DESIGNS_DIR = STORAGE_DIR ? path.join(STORAGE_DIR, 'designs') : REPO_DESIG
 const DB_FILE = path.join(DESIGNS_DIR, 'designs.json');
 const DATA_DIR = STORAGE_DIR ? path.join(STORAGE_DIR, '.data') : path.join(ROOT, '.data');
 const MESSAGES_FILE = path.join(DATA_DIR, 'messages.json');
+const INVENTORY_FILE = path.join(DATA_DIR, 'inventory.json');
 const PORT = Number(process.env.PORT) || 3000;
 const MAX_BODY = 40 * 1024 * 1024;
 
-const { TYPES: BINDER_TYPES, COLORS: BINDER_COLORS } = require('./public/js/catalog.js');
+const { TYPES: BINDER_TYPES, COLORS: BINDER_COLORS, shippingOptions } = require('./public/js/catalog.js');
 
 // Supabase project URL: from .env, or the one the website already uses (public/js/supabase-config.js).
 const SUPABASE_URL = (process.env.SUPABASE_URL || (() => {
@@ -290,6 +292,51 @@ async function updateStock(req, res) {
   sendJson(res, 200, { unavailable: db.settings.unavailable });
 }
 
+// Stock counts the admin types in: { typeId: { colourId: count } }, kept in .data/ so customers never
+// see them. A colour with no count isn't tracked and its availability is set by hand.
+function readInventory() {
+  let raw;
+  try {
+    raw = JSON.parse(fs.readFileSync(INVENTORY_FILE, 'utf8'));
+  } catch {
+    raw = {};
+  }
+  const out = {};
+  for (const t of BINDER_TYPES) {
+    for (const c of t.colors) {
+      const n = raw[t.id] && raw[t.id][c];
+      if (Number.isInteger(n) && n >= 0) (out[t.id] = out[t.id] || {})[c] = n;
+    }
+  }
+  return out;
+}
+
+// PATCH /api/inventory { type, color, count } (admin): sets one count (null clears it). A count of 0
+// crosses the colour out in Colour availability; a count above 0 makes it available again.
+async function updateInventory(req, res) {
+  const body = JSON.parse(await readBody(req, 4 * 1024));
+  const type = BINDER_TYPES.find((t) => t.id === body.type);
+  if (!type || !type.colors.includes(body.color)) throw badRequest("That binder size doesn't come in that colour.");
+  const count = body.count === null || body.count === '' ? null : Number(body.count);
+  if (count !== null && !(Number.isInteger(count) && count >= 0 && count <= 99999)) throw badRequest('Stock must be a whole number from 0 to 99999.');
+  const inventory = readInventory();
+  const counts = inventory[type.id] || {};
+  if (count === null) delete counts[body.color];
+  else counts[body.color] = count;
+  inventory[type.id] = counts;
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(INVENTORY_FILE + '.tmp', JSON.stringify(inventory, null, 2));
+  fs.renameSync(INVENTORY_FILE + '.tmp', INVENTORY_FILE);
+  const db = readDb();
+  if (count !== null) {
+    const off = (db.settings.unavailable[type.id] || []).filter((c) => c !== body.color);
+    if (count === 0) off.push(body.color);
+    db.settings.unavailable = cleanStock({ ...db.settings.unavailable, [type.id]: off });
+    writeDb(db);
+  }
+  sendJson(res, 200, { inventory: readInventory(), unavailable: db.settings.unavailable });
+}
+
 // A list (or comma-separated string) of short labels, trimmed, without duplicates.
 function cleanNames(input) {
   const list = Array.isArray(input) ? input : String(input || '').split(',');
@@ -507,7 +554,6 @@ async function artDownload(id, index, res) {
 // ─── Checkout (customers) ──────────────────────────────────────────────────────────────
 // The cart page sends only what's in the cart and the delivery details. Every price is worked out
 // here from the catalogue (designs.json + catalog.js), with the same rules the shop pages show.
-const SHIPPING_FEE = 3; // flat, per order (SGD); the cart page shows the same
 const MAX_QTY = 20;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const badRequest = (msg) => Object.assign(new Error(msg), { status: 400 });
@@ -596,7 +642,8 @@ function checkDetails(d) {
   return out;
 }
 
-// POST /api/checkout { orderId, items, details } → { orderId, total }
+// POST /api/checkout { orderId, items, details, shipping } → { orderId, total }
+// shipping is 'mail' or 'courier'; the fee comes from catalog.js, and courier-only binders allow only that.
 async function checkout(req, res) {
   const user = await customerFrom(req);
   if (!user) return sendJson(res, 401, { error: 'Please log in again to check out.' });
@@ -608,8 +655,15 @@ async function checkout(req, res) {
   const db = readDb();
   const items = body.items.map((i) => priceLine(i, user, db));
   const details = checkDetails(body.details || {});
+  const typeIds = items.map((l) => BINDER_TYPES.find((t) => t.name === l.binder_type).id);
+  const shipping = shippingOptions(typeIds).find((s) => s.id === body.shipping);
+  if (!shipping) {
+    throw badRequest(body.shipping === 'mail'
+      ? 'Toploader 9-slots and 12-slots binders can only be sent by courier. Please choose Courier.'
+      : 'Please choose a mailing option.');
+  }
   const subtotal = cents(items.reduce((sum, l) => sum + l.unit_price * l.qty, 0)) / 100;
-  const total = cents(subtotal + SHIPPING_FEE) / 100;
+  const total = cents(subtotal + shipping.price) / 100;
 
   const [existing] = await supa(`/rest/v1/orders?select=id&id=eq.${orderId}`);
   if (existing) return sendJson(res, 409, { error: 'This order has already been placed. Please refresh the cart page.' });
@@ -617,7 +671,7 @@ async function checkout(req, res) {
     method: 'POST',
     body: JSON.stringify({
       id: orderId, user_id: user.id, status: 'pending',
-      items, item_count: items.reduce((n, l) => n + l.qty, 0), subtotal, shipping_fee: SHIPPING_FEE, total,
+      items, item_count: items.reduce((n, l) => n + l.qty, 0), subtotal, shipping_fee: shipping.price, total,
       ...details,
     }),
   });
@@ -748,6 +802,11 @@ http.createServer(async (req, res) => {
     if (pathname === '/api/stock' && req.method === 'PATCH') {
       if (!(await requireAdmin(req, res))) return;
       return await updateStock(req, res);
+    }
+    if (pathname === '/api/inventory' && (req.method === 'GET' || req.method === 'PATCH')) {
+      if (!(await requireAdmin(req, res))) return;
+      if (req.method === 'GET') return sendJson(res, 200, readInventory());
+      return await updateInventory(req, res);
     }
     if (pathname === '/api/settings' && req.method === 'PATCH') {
       if (!(await requireAdmin(req, res))) return;

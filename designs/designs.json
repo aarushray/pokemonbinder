@@ -218,9 +218,9 @@
     "bannerText": "Christmas Sale: 20% off all binders",
     "unavailable": {
       "4-pocket": [
-        "#e87a79",
         "#614875",
-        "#fbcb46"
+        "#fbcb46",
+        "#e87a79"
       ],
       "9-pocket": [
         "#445479",

@@ -12,7 +12,9 @@
   if (designs.length) Shop.pruneCart(byId);
   CustomArt.prune(Shop.customArtIds()).catch(() => {});
   const artCache = new Map();
-  const SHIPPING_FEE = 3; // flat, per order (SGD)
+  const SHIPPING_KEY = 'checkout-shipping';
+  let shippingChoice = '';
+  try { shippingChoice = sessionStorage.getItem(SHIPPING_KEY) || ''; } catch { /* not kept */ }
 
   // Artwork for a line: the shop design's art, or the customer's own upload.
   function art(item) {
@@ -52,8 +54,10 @@
 
     let total = 0;
     let count = 0;
+    const typeIds = [];
     for (const item of items) {
       const { name: title, href, type, unit } = describe(item);
+      typeIds.push(type.id);
       total += unit.price * item.qty;
       count += item.qty;
 
@@ -112,9 +116,42 @@
     const subtotal = Math.round(total * 100) / 100;
     document.getElementById('items').textContent = count;
     document.getElementById('subtotal').textContent = Shop.money(subtotal);
-    document.getElementById('shipping').textContent = Shop.money(SHIPPING_FEE);
-    document.getElementById('total').textContent = Shop.money(subtotal + SHIPPING_FEE);
+    const shipping = renderShipping(typeIds);
+    document.getElementById('shipping').textContent = Shop.money(shipping.price);
+    document.getElementById('total').textContent = Shop.money(subtotal + shipping.price);
   }
+
+  // ---- Mailing ----
+  // Tracked mailing or courier; carts with a toploader 9-slots or 12-slots binder go by courier only.
+  // Returns the chosen option.
+  function renderShipping(typeIds) {
+    const options = Catalog.shippingOptions(typeIds);
+    const chosen = options.find((s) => s.id === shippingChoice) || options[0];
+    document.getElementById('shippingNote').hidden = options.length === Catalog.SHIPPING.length;
+    document.getElementById('shippingOptions').replaceChildren(...options.map((s) => {
+      const label = document.createElement('label');
+      label.className = 'shipping-option';
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = 'shipping';
+      radio.value = s.id;
+      radio.checked = s === chosen;
+      radio.addEventListener('change', () => {
+        shippingChoice = s.id;
+        try { sessionStorage.setItem(SHIPPING_KEY, s.id); } catch { /* not kept */ }
+        render();
+      });
+      const name = document.createElement('span');
+      name.textContent = s.name;
+      const price = document.createElement('span');
+      price.className = 'shipping-price';
+      price.textContent = Shop.money(s.price);
+      label.append(radio, name, price);
+      return label;
+    }));
+    return chosen;
+  }
+  const chosenShipping = () => (document.querySelector('input[name="shipping"]:checked') || {}).value;
 
   // ---- Delivery details ----
   // Kept in this tab while the customer logs in, and filled from their profile (saved at their last
@@ -257,7 +294,7 @@
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session && session.access_token}` },
-        body: JSON.stringify({ orderId: pendingOrderId, items: lines, details: d }),
+        body: JSON.stringify({ orderId: pendingOrderId, items: lines, details: d, shipping: chosenShipping() }),
       }).catch(() => null);
       if (!res) throw new Error("Couldn't reach the shop. Please check your connection and try again.");
       result = await res.json().catch(() => ({}));

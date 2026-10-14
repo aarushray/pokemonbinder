@@ -683,6 +683,102 @@
     renderStock();
   }).catch(() => {});
 
+  // ---- Stock inventory: a count per binder size and colour ----
+  // Saving a count of 0 crosses that colour out above; a count above 0 makes it available again.
+  const inventoryEl = document.getElementById('inventory');
+  const inventoryStatus = document.getElementById('inventoryStatus');
+  let inventory = {};
+  const showInventoryStatus = (msg, isError) => {
+    inventoryStatus.hidden = !msg;
+    inventoryStatus.textContent = msg;
+    inventoryStatus.classList.toggle('error', !!isError);
+  };
+
+  function renderInventory() {
+    const head = document.createElement('tr');
+    head.appendChild(document.createElement('th'));
+    for (const c of Binder.COLORS) {
+      const th = document.createElement('th');
+      th.scope = 'col';
+      const dot = document.createElement('span');
+      dot.className = 'swatch inventory-dot';
+      dot.style.setProperty('--c', c.hex);
+      if (c.texture === 'felt') dot.classList.add('swatch-felt');
+      const label = document.createElement('span');
+      label.textContent = c.name;
+      th.append(dot, label);
+      head.appendChild(th);
+    }
+    const rows = Binder.TYPES.map((t) => {
+      const tr = document.createElement('tr');
+      const th = document.createElement('th');
+      th.scope = 'row';
+      th.textContent = t.name;
+      tr.appendChild(th);
+      for (const c of Binder.COLORS) {
+        const td = document.createElement('td');
+        if (!t.colors.includes(c.id)) {
+          td.className = 'inventory-na';
+          td.textContent = '—';
+          td.title = `${t.name} doesn't come in ${c.name}`;
+        } else {
+          const input = document.createElement('input');
+          input.type = 'number';
+          input.min = '0';
+          input.max = '99999';
+          input.step = '1';
+          input.inputMode = 'numeric';
+          input.placeholder = '–';
+          input.setAttribute('aria-label', `${t.name} ${c.name} in stock`);
+          const saved = (inventory[t.id] || {})[c.id];
+          input.value = saved === undefined ? '' : String(saved);
+          input.classList.toggle('inventory-zero', saved === 0);
+          input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+          input.addEventListener('change', () => saveInventory(t, c, input.value.trim()));
+          td.appendChild(input);
+        }
+        tr.appendChild(td);
+      }
+      return tr;
+    });
+    const thead = document.createElement('thead');
+    thead.appendChild(head);
+    const tbody = document.createElement('tbody');
+    tbody.append(...rows);
+    inventoryEl.replaceChildren(thead, tbody);
+  }
+
+  async function saveInventory(t, c, value) {
+    const count = value === '' ? null : Number(value);
+    if (count !== null && !(Number.isInteger(count) && count >= 0)) {
+      showInventoryStatus('Stock must be a whole number, 0 or more.', true);
+      renderInventory();
+      return;
+    }
+    try {
+      const saved = await adminFetch('/api/inventory', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: t.id, color: c.id, count }),
+      });
+      inventory = saved.inventory;
+      stock = saved.unavailable;
+      renderStock();
+      showInventoryStatus(count === null ? `Stopped tracking ${t.name} ${c.name}.`
+        : count === 0 ? `${t.name} ${c.name}: 0 left, now crossed out for customers.`
+        : `${t.name} ${c.name}: ${count} left.`);
+    } catch (err) {
+      showInventoryStatus(err.message, true);
+    }
+    renderInventory();
+  }
+
+  renderInventory();
+  adminFetch('/api/inventory').then((saved) => {
+    inventory = saved;
+    renderInventory();
+  }).catch((err) => showInventoryStatus(err.message, true));
+
   // While a storewide discount is on, binders can't have their own: every per-binder discount
   // field is emptied and disabled. They unlock when the storewide discount goes back to 0.
   let storeDiscountOn = false;

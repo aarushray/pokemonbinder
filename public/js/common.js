@@ -440,39 +440,50 @@ const Shop = (() => {
   }
 
   // Drops cart lines whose design has since been deleted from the shop.
-  // Two slides for a binder preview: the front cover (the page's own canvas, with the design) and
-  // the back cover (the same binder mirrored, no design), switched with arrows, the dots or a swipe.
-  // Call setBinder(type, color) whenever the binder changes so the back cover matches.
+  // Three slides for a binder preview: the front cover (the page's own canvas, with the design), the
+  // spine seen at an angle (logo on the spine, design on the cover) and the plain back cover,
+  // switched with arrows, the dots or a swipe. Call setBinder(type, color, art) whenever the binder
+  // changes so the other views match; `art` is { image, fit, invert } once the design has loaded.
   const CHEVRON = (d) => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`;
 
   function coverSlides(front) {
     const stage = front.parentElement;
     stage.classList.add('cover-slides');
-    front.setAttribute('aria-label', 'Front cover');
-    const back = document.createElement('canvas');
-    back.setAttribute('aria-label', 'Back cover');
-    back.hidden = true;
-    front.after(back);
+    // view: what Binder.render draws on the slide (the front is drawn by the page itself).
+    const slides = [
+      { label: 'Front cover', canvas: front },
+      { label: 'Spine', view: 'spine' },
+      { label: 'Back cover', view: 'back' },
+    ];
+    let after = front;
+    for (const sl of slides) {
+      if (!sl.canvas) {
+        sl.canvas = document.createElement('canvas');
+        sl.canvas.hidden = true;
+        after.after(sl.canvas);
+      }
+      sl.canvas.setAttribute('aria-label', sl.label);
+      after = sl.canvas;
+    }
 
-    const arrow = (cls, label, path, to) => {
+    const arrow = (cls, path, step) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = `slide-arrow ${cls}`;
-      b.setAttribute('aria-label', label);
       b.innerHTML = CHEVRON(path);
-      b.addEventListener('click', () => show(to));
+      b.addEventListener('click', () => show(index + step));
       stage.appendChild(b);
       return b;
     };
-    const prev = arrow('slide-prev', 'Show front cover', 'm15 18-6-6 6-6', 0);
-    const next = arrow('slide-next', 'Show back cover', 'm9 18 6-6-6-6', 1);
+    const prev = arrow('slide-prev', 'm15 18-6-6 6-6', -1);
+    const next = arrow('slide-next', 'm9 18 6-6-6-6', 1);
 
     const dots = document.createElement('div');
     dots.className = 'slide-dots';
-    const dotEls = ['Front cover', 'Back cover'].map((label, i) => {
+    const dotEls = slides.map((sl, i) => {
       const d = document.createElement('button');
       d.type = 'button';
-      d.setAttribute('aria-label', label);
+      d.setAttribute('aria-label', sl.label);
       d.addEventListener('click', () => show(i));
       dots.appendChild(d);
       return d;
@@ -481,20 +492,25 @@ const Shop = (() => {
 
     let index = 0;
     let binder = null;
-    let backDrawn = false;
-    function drawBack() {
-      if (!binder || backDrawn) return;
-      Binder.render(back, { type: binder.type, color: binder.color, back: true });
-      backDrawn = true;
+    // Slides are drawn when first shown, and again after the binder changes.
+    function draw(sl) {
+      if (!binder || !sl.view || sl.drawn) return;
+      Binder.render(sl.canvas, { ...binder.art, type: binder.type, color: binder.color, view: sl.view });
+      sl.drawn = true;
     }
     function show(i) {
-      index = i;
-      if (i === 1) drawBack();
-      front.hidden = i !== 0;
-      back.hidden = i !== 1;
-      prev.hidden = i === 0;
-      next.hidden = i === 1;
-      dotEls.forEach((d, j) => d.setAttribute('aria-current', String(j === i)));
+      index = Math.max(0, Math.min(slides.length - 1, i));
+      draw(slides[index]);
+      slides.forEach((sl, j) => { sl.canvas.hidden = j !== index; });
+      prev.hidden = index === 0;
+      next.hidden = index === slides.length - 1;
+      if (index > 0) prev.setAttribute('aria-label', `Show ${slides[index - 1].label.toLowerCase()}`);
+      if (index < slides.length - 1) next.setAttribute('aria-label', `Show ${slides[index + 1].label.toLowerCase()}`);
+      dotEls.forEach((d, j) => d.setAttribute('aria-current', String(j === index)));
+    }
+    function redraw() {
+      for (const sl of slides) sl.drawn = false;
+      draw(slides[index]);
     }
 
     // Swipe left/right on touch screens.
@@ -504,23 +520,20 @@ const Shop = (() => {
       if (startX === null) return;
       const dx = e.changedTouches[0].clientX - startX;
       startX = null;
-      if (Math.abs(dx) > 40) show(dx < 0 ? 1 : 0);
+      if (Math.abs(dx) > 40) show(index + (dx < 0 ? 1 : -1));
     });
 
     show(0);
-    // The logo on the back cover loads separately; redraw the back once it's ready.
-    Binder.logoReady.then((ok) => {
-      if (!ok) return;
-      backDrawn = false;
-      if (index === 1) drawBack();
-    });
+    // The logo on the spine loads separately; redraw once it's ready.
+    Binder.logoReady.then((ok) => { if (ok) redraw(); });
     return {
       show,
-      setBinder(type, color) {
-        if (binder && binder.type === type && binder.color === color) return;
-        binder = { type, color };
-        backDrawn = false;
-        if (index === 1) drawBack();
+      setBinder(type, color, art = {}) {
+        const image = art.image || null;
+        if (binder && binder.type === type && binder.color === color && binder.art.image === image
+          && binder.art.fit === art.fit && binder.art.invert === art.invert) return;
+        binder = { type, color, art: { image, fit: art.fit, invert: art.invert } };
+        redraw();
       },
     };
   }

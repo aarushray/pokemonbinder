@@ -295,10 +295,9 @@
     return surf;
   }
 
-  // ─── TCGEngrave logo, engraved on the back cover ───────────────────────────────────────
+  // ─── TCGEngrave logo, hot-pressed into the spine ───────────────────────────────────────
   // The logo file is black on white; its dark strokes become a mask, trimmed to the logo's edges.
-  // Binder.logoReady resolves once it's loaded (back covers drawn earlier can then be redrawn).
-  const LOGO_OPACITY = 0.6; // how strongly the logo is engraved (1 = as strong as the design)
+  // Binder.logoReady resolves once it's loaded (spine views drawn earlier can then be redrawn).
   let logoMask = null; // { w, h, alpha: Float32Array }
   const logoReady = new Promise((resolve) => {
     if (typeof Image === 'undefined') return resolve(false);
@@ -339,10 +338,10 @@
     img.src = 'images/tcgengrave-logo.jpg';
   });
 
-  // The logo in the engraving colour of `base`, `width` px wide (cached per colour and size).
+  // The logo in colour `ink` (an [r, g, b]), `width` px wide (cached per colour and size).
   const logoCache = new Map();
-  function tintedLogo(base, depth, width) {
-    const key = `${base.join(',')}|${depth}|${width}`;
+  function tintedLogo(ink, width) {
+    const key = `${ink.join(',')}|${width}`;
     if (logoCache.has(key)) return logoCache.get(key);
     const height = Math.round((width * logoMask.h) / logoMask.w);
     // Scale the mask down to size, then colour it.
@@ -360,8 +359,7 @@
     og.imageSmoothingQuality = 'high';
     og.drawImage(src, 0, 0, width, height);
     og.globalCompositeOperation = 'source-in';
-    const { eng } = depthSettings(base, depth);
-    og.fillStyle = rgb(eng);
+    og.fillStyle = rgb(ink);
     og.fillRect(0, 0, width, height);
     if (logoCache.size > 40) logoCache.clear();
     logoCache.set(key, out);
@@ -369,10 +367,14 @@
   }
 
   // Draws the binder (with shadow, on a transparent background) into `canvas`, resizing it.
-  // `back: true` draws the back cover: the same binder mirrored left to right (spine on the right),
-  // with no design and the TCGEngrave logo engraved in the bottom corner beside the spine.
-  function render(canvas, { image = null, color = COLORS[0].id, type = DEFAULT_TYPE, fit = 'cover', invert = false, scale: frameScale = 1, back = false } = {}) {
-    if (back) image = null;
+  // `view: 'spine'` draws the spine at an angle instead of the front cover (see renderSpine), and
+  // `view: 'back'` the plain back cover: the same binder mirrored (spine on the right), no design.
+  // Returns where the binder sits in the canvas: { x0, y0, bw, bh, scale }.
+  function render(canvas, options = {}) {
+    if (options.view === 'spine') return renderSpine(canvas, options);
+    const back = options.view === 'back';
+    const { color = COLORS[0].id, type = DEFAULT_TYPE, fit = 'cover', invert = false, scale: frameScale = 1, shadow = true } = options;
+    const image = back ? null : options.image || null;
     const t = getType(type);
     // Binders with a `display` factor are drawn smaller, centred in a picture sized like the 9-pocket's.
     const scale = frameScale * (t.shape.display || 1);
@@ -429,7 +431,7 @@
 
     // Body with drop shadow.
     ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+    ctx.shadowColor = shadow ? 'rgba(0,0,0,0.3)' : 'transparent';
     ctx.shadowBlur = 40 * scale;
     ctx.shadowOffsetY = 18 * scale;
     ctx.fillStyle = rgb(base);
@@ -487,25 +489,219 @@
     ctx.stroke();
     ctx.restore();
 
-    // Back cover: the logo, engraved in the bottom corner next to the spine (drawn unmirrored so
-    // it reads the right way round).
-    if (back && logoMask) {
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      const logoW = Math.round(coverW * 0.27);
-      const logo = tintedLogo(base, depth, logoW);
-      const margin = coverW * 0.07;
-      const spineEdge = canvas.width - (x0 + spineW); // the spine fold, on screen (mirrored)
-      ctx.globalAlpha = LOGO_OPACITY;
-      ctx.drawImage(logo, Math.round(spineEdge - inset - margin - logo.width), Math.round(y0 + bh - inset - margin - logo.height));
-      ctx.restore();
-    }
-
     // Crisp outer edge.
     path();
     ctx.lineWidth = Math.max(0.75, 1.5 * scale);
     ctx.strokeStyle = 'rgba(0,0,0,0.22)';
     ctx.stroke();
+    return { x0, y0, bw, bh, scale };
+  }
+
+  // ─── Spine view ───────────────────────────────────────────────────────────────────────
+  // The closed binder turned so its spine faces the viewer at an angle, seen from a little above
+  // its top edge: the spine on the left with the TCGEngrave logo hot-pressed down its centre, the
+  // front cover (with the design) going away to the right in perspective, and along the top the
+  // binder's padded rim around the dark inside. Same canvas size as the front view.
+  // Seen from above, the binder is a rounded rectangle: the spine is flat across the middle and
+  // curves smoothly round into each cover. The upright faces are flat pictures drawn one pixel
+  // column at a time to fake perspective.
+  const SPINE_TURN = (24 * Math.PI) / 180; // how far the binder is turned away from facing the spine
+  const SPINE_THICK = 0.2; // spine width as a fraction of the cover width, unless the type sets `thick`
+  const SPINE_ROUND = 0.3; // radius of the spine's rounded corners, as a fraction of its width
+  const RIM = 0.08; // thickness of the covers seen along the top edge, as a fraction of the spine width
+  const CAMERA = 2.2; // camera distance in binder heights (smaller = stronger perspective)
+  const EYE = 0.3; // how far the camera is above the binder's top, in binder heights
+
+  // The spine, unrolled flat: the binder's fabric with the logo in the middle, about `logoSpace` px
+  // across.
+  function spineFace(base, texture, depth, w, h, scale, dark, logoSpace) {
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const g = c.getContext('2d');
+    g.drawImage(renderSurface(base, null, w, h, 0, w, scale, texture, depth), 0, 0);
+    // The logo, hot-pressed (darker than the fabric) and turned to read from top to bottom, centred
+    // on the spine. A faint light edge beside each stroke makes it look pressed in. On very light
+    // binders (white) the press stays near the binder's colour, with a soft shadow edge so it shows.
+    if (logoMask) {
+      const aspect = logoMask.w / logoMask.h;
+      const len = Math.round(Math.min(h * 0.36, logoSpace * aspect));
+      const light = luminance(base) > 0.75;
+      const ink = shade(base, dark ? 0.55 : light ? 0.9 : 0.62);
+      const logo = tintedLogo(ink, len);
+      const edge = tintedLogo(shade(base, dark ? 1.5 : 1.12), len);
+      g.save();
+      g.translate(w / 2, h / 2);
+      g.rotate(Math.PI / 2);
+      const off = Math.max(1, 1.5 * scale);
+      if (light) {
+        g.globalAlpha = 0.55;
+        g.drawImage(tintedLogo(shade(base, 0.72), len), -logo.width / 2 - off, -logo.height / 2 + off);
+      }
+      g.globalAlpha = 0.5;
+      g.drawImage(edge, -logo.width / 2 + off, -logo.height / 2 - off);
+      g.globalAlpha = 0.9;
+      g.drawImage(logo, -logo.width / 2, -logo.height / 2);
+      g.restore();
+    }
+    return c;
+  }
+
+  // Points (x, z) round a rounded rectangle seen from above: x from -w/2 to w/2, z from z0 back to
+  // z1, corners of radius r on the z0 side only. Runs from the far end of the left side, round the
+  // front, to the far end of the right side.
+  function roundedOutline(w, z0, z1, r, steps = 12) {
+    const pts = [[-w / 2, z1]];
+    for (const [cx, sign] of [[-w / 2 + r, -1], [w / 2 - r, 1]]) {
+      for (let i = 0; i <= steps; i++) {
+        const a = (Math.PI / 2) * (sign < 0 ? i / steps : 1 - i / steps);
+        pts.push([cx + sign * r * Math.cos(a), z0 + r - r * Math.sin(a)]);
+      }
+    }
+    pts.push([w / 2, z1]);
+    return pts;
+  }
+
+  function renderSpine(canvas, { image = null, color = COLORS[0].id, type = DEFAULT_TYPE, fit = 'cover', invert = false, scale: frameScale = 1 } = {}) {
+    const t = getType(type);
+    // The front cover, flat, drawn by the front view (without its shadow) and cut out of its canvas.
+    const flat = document.createElement('canvas');
+    const { x0, y0, bw, bh, scale } = render(flat, { image, color, type, fit, invert, scale: frameScale, shadow: false });
+    const cover = document.createElement('canvas');
+    cover.width = bw;
+    cover.height = bh;
+    cover.getContext('2d').drawImage(flat, x0, y0, bw, bh, 0, 0, bw, bh);
+
+    const { hex, texture, depth } = resolveColor(color);
+    const base = hexToRgb(hex);
+    const dark = luminance(base) < 0.28;
+    const thick = Math.round(COVER_W * scale * (t.shape.thick || SPINE_THICK));
+    const r = thick * SPINE_ROUND;
+    // The top edge stops where the cover's far corner starts to round off.
+    const far = bw - t.shape.radius * scale;
+
+    // The spine's outer surface: round the left corner, across, round the right corner (the cover
+    // then carries on from (thick/2, r) to the back). u is how far along the spine's picture.
+    const curve = roundedOutline(thick, 0, r, r).slice(1, -1);
+    let length = 0;
+    const spinePts = curve.map((p, i) => {
+      if (i) length += Math.hypot(p[0] - curve[i - 1][0], p[1] - curve[i - 1][1]);
+      return { p, len: length };
+    });
+    const spine = spineFace(base, texture, depth, Math.round(length), bh, scale, dark, thick * 0.6);
+
+    // Turn by SPINE_TURN, push away from the camera, then project. The camera is EYE binder heights
+    // above the top edge, so a point at height y (0 = top edge, bh = bottom) is drawn at
+    // screen y = (y + eye) / z, below the horizon.
+    const cos = Math.cos(SPINE_TURN);
+    const sin = Math.sin(SPINE_TURN);
+    const dist = CAMERA * bh;
+    const eye = EYE * bh;
+    const turn = ([x, z]) => [x * cos + z * sin, -x * sin + z * cos + dist];
+    const faces = [
+      { pic: spine, pts: spinePts.map((q) => ({ p: turn(q.p), u: q.len / length })), lit: true },
+      { pic: cover, pts: [{ p: turn([thick / 2, r]), u: 0 }, { p: turn([thick / 2, bw]), u: 1 }], light: [0.02, 0.3] },
+    ];
+    const top = roundedOutline(thick, 0, far, r).map(turn);
+    const pts = [...faces.flatMap((f) => f.pts.map((q) => q.p)), ...top];
+    const minX = Math.min(...pts.map(([x, z]) => x / z));
+    const maxX = Math.max(...pts.map(([x, z]) => x / z));
+    const minY = Math.min(...pts.map(([, z]) => eye / z));
+    const maxY = Math.max(...pts.map(([, z]) => (eye + bh) / z));
+    // Fit the picture inside the front view's binder area, centred in a canvas of the same size.
+    canvas.width = flat.width;
+    canvas.height = flat.height;
+    const k = Math.min((canvas.width - 2 * x0) / (maxX - minX), bh / (maxY - minY));
+    const cx = canvas.width / 2 - (k * (minX + maxX)) / 2;
+    const horizon = y0 + bh / 2 - (k * (minY + maxY)) / 2;
+    const screen = ([x, z], y) => [cx + (k * x) / z, horizon + (k * (y + eye)) / z];
+    // Light from the front left, for the rounded corners (a direction in the seen-from-above plane).
+    const L = [-0.5, -1].map((v) => v / Math.hypot(0.5, 1));
+
+    const layer = document.createElement('canvas');
+    layer.width = canvas.width;
+    layer.height = canvas.height;
+    const lg = layer.getContext('2d');
+
+    // The top edge: the covers' padded rim (lit from above) round the dark inside of the binder.
+    const outline = (list) => {
+      lg.beginPath();
+      list.forEach((p, i) => {
+        const [sx, sy] = screen(p, 0);
+        if (i) lg.lineTo(sx, sy);
+        else lg.moveTo(sx, sy);
+      });
+      lg.closePath();
+    };
+    const rim = thick * RIM;
+    outline(top);
+    lg.fillStyle = rgb(shade(base, dark ? 1.25 : 1.06));
+    lg.fill();
+    outline(roundedOutline(thick - 2 * rim, rim, far - rim, Math.max(1, r - rim)).map(turn));
+    lg.fillStyle = rgb(shade(base, 0.22));
+    lg.fill();
+
+    // The upright faces: spine, then cover.
+    for (const f of faces) {
+      const face = document.createElement('canvas');
+      face.width = canvas.width;
+      face.height = canvas.height;
+      const fg = face.getContext('2d');
+      let left = Infinity;
+      let right = -Infinity;
+      for (let i = 1; i < f.pts.length; i++) {
+        const A = f.pts[i - 1];
+        const B = f.pts[i];
+        const [xa, za] = A.p;
+        const dx = B.p[0] - xa;
+        const dz = B.p[1] - za;
+        const from = cx + (k * xa) / za;
+        const to = cx + (k * B.p[0]) / B.p[1];
+        if (to <= from) continue; // facing away from the camera
+        left = Math.min(left, from);
+        right = Math.max(right, to);
+        // Brightness of this strip of the spine: its outward side, against the light.
+        let tint = null;
+        if (f.lit) {
+          const n = [dz, -dx].map((v) => v / Math.hypot(dx, dz));
+          const b = 0.82 + 0.26 * Math.max(0, n[0] * L[0] + n[1] * L[1]);
+          tint = b < 1 ? `rgba(0,0,0,${1 - b})` : `rgba(255,255,255,${(b - 1) * 0.6})`;
+        }
+        for (let X = Math.floor(from); X < Math.ceil(to); X++) {
+          const sx = (X + 0.5 - cx) / k;
+          // Where along this strip the column is (0 at A, 1 at B), allowing for perspective.
+          const s = Math.min(1, Math.max(0, (xa - sx * za) / (sx * dz - dx)));
+          const u = A.u + s * (B.u - A.u);
+          const z = za + s * dz;
+          const yTop = horizon + (k * eye) / z;
+          const h = (k * bh) / z;
+          fg.drawImage(f.pic, Math.min(f.pic.width - 1, Math.floor(u * f.pic.width)), 0, 1, f.pic.height, X, yTop, 1.5, h);
+          if (tint) {
+            fg.fillStyle = tint;
+            fg.fillRect(X, yTop, 1, h);
+          }
+        }
+      }
+      // Light falls off across the cover, which turns away from the light.
+      if (f.light) {
+        fg.globalCompositeOperation = 'source-atop';
+        const shadeGrad = fg.createLinearGradient(left, 0, right, 0);
+        shadeGrad.addColorStop(0, `rgba(0,0,0,${f.light[0]})`);
+        shadeGrad.addColorStop(1, `rgba(0,0,0,${f.light[1]})`);
+        fg.fillStyle = shadeGrad;
+        fg.fillRect(left, 0, right - left, canvas.height);
+      }
+      lg.drawImage(face, 0, 0);
+    }
+
+    const ctx = canvas.getContext('2d');
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+    ctx.shadowBlur = 40 * scale;
+    ctx.shadowOffsetY = 18 * scale;
+    ctx.drawImage(layer, 0, 0);
+    ctx.restore();
+    return { x0, y0, bw, bh, scale };
   }
 
   window.Binder = { COLORS, TYPES, DEFAULT_TYPE, getType, typeColors, finishes, finishColors, finishOf, finishExtra, finishLabel, capacity, logoReady, render, colorName, colorHex };
