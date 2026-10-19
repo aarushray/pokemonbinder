@@ -295,9 +295,10 @@
     return surf;
   }
 
-  // ─── TCGEngrave logo, hot-pressed into the spine ───────────────────────────────────────
+  // ─── TCGEngrave logo, engraved on the back cover ───────────────────────────────────────
   // The logo file is black on white; its dark strokes become a mask, trimmed to the logo's edges.
-  // Binder.logoReady resolves once it's loaded (spine views drawn earlier can then be redrawn).
+  // Binder.logoReady resolves once it's loaded (back covers drawn earlier can then be redrawn).
+  const LOGO_OPACITY = 0.6; // how strongly the logo is engraved (1 = as strong as the design)
   let logoMask = null; // { w, h, alpha: Float32Array }
   const logoReady = new Promise((resolve) => {
     if (typeof Image === 'undefined') return resolve(false);
@@ -368,7 +369,8 @@
 
   // Draws the binder (with shadow, on a transparent background) into `canvas`, resizing it.
   // `view: 'spine'` draws the spine at an angle instead of the front cover (see renderSpine), and
-  // `view: 'back'` the plain back cover: the same binder mirrored (spine on the right), no design.
+  // `view: 'back'` the back cover: the same binder mirrored (spine on the right), no design, with
+  // the TCGEngrave logo engraved in the bottom corner beside the spine.
   // Returns where the binder sits in the canvas: { x0, y0, bw, bh, scale }.
   function render(canvas, options = {}) {
     if (options.view === 'spine') return renderSpine(canvas, options);
@@ -488,6 +490,19 @@
     ctx.strokeStyle = rgb(dark ? shade(base, 1.6) : shade(base, 0.78), 0.9);
     ctx.stroke();
     ctx.restore();
+
+    // Back cover: the logo, engraved in the bottom corner next to the spine (drawn unmirrored so
+    // it reads the right way round).
+    if (back && logoMask) {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      const logo = tintedLogo(depthSettings(base, depth).eng, Math.round(coverW * 0.27));
+      const margin = coverW * 0.07;
+      const spineEdge = canvas.width - (x0 + spineW); // the spine fold, on screen (mirrored)
+      ctx.globalAlpha = LOGO_OPACITY;
+      ctx.drawImage(logo, Math.round(spineEdge - inset - margin - logo.width), Math.round(y0 + bh - inset - margin - logo.height));
+      ctx.restore();
+    }
 
     // Crisp outer edge.
     path();

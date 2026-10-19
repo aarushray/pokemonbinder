@@ -440,9 +440,8 @@ const Shop = (() => {
   }
 
   // Drops cart lines whose design has since been deleted from the shop.
-  // Three slides for a binder preview: the front cover (the page's own canvas, with the design), the
-  // spine seen at an angle (logo on the spine, design on the cover) and the plain back cover,
-  // switched with arrows, the dots or a swipe. Call setBinder(type, color, art) whenever the binder
+  // Two slides for a binder preview: the front cover (the page's own canvas, with the design) and
+  // the back cover (with the TCGEngrave logo), switched with arrows, the dots or a swipe. Call setBinder(type, color, art) whenever the binder
   // changes so the other views match; `art` is { image, fit, invert } once the design has loaded.
   const CHEVRON = (d) => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`;
 
@@ -452,7 +451,6 @@ const Shop = (() => {
     // view: what Binder.render draws on the slide (the front is drawn by the page itself).
     const slides = [
       { label: 'Front cover', canvas: front },
-      { label: 'Spine', view: 'spine' },
       { label: 'Back cover', view: 'back' },
     ];
     let after = front;
@@ -524,7 +522,7 @@ const Shop = (() => {
     });
 
     show(0);
-    // The logo on the spine loads separately; redraw once it's ready.
+    // The logo on the back cover loads separately; redraw once it's ready.
     Binder.logoReady.then((ok) => { if (ok) redraw(); });
     return {
       show,
