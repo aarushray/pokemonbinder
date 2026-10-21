@@ -60,7 +60,7 @@
       const subs = document.createElement('div');
       subs.className = 'sub-checks';
       if (page && page.subclasses.length) {
-        for (const s of page.subclasses) {
+        for (const s of Shop.sortSubclasses(page.subclasses)) {
           const label = document.createElement('label');
           label.className = 'sub-check';
           const box = document.createElement('input');
@@ -134,23 +134,12 @@
 
     const subs = document.createElement('div');
     subs.className = 'sub-list';
-    for (const s of c.subclasses) {
+    for (const s of Shop.sortSubclasses(c.subclasses)) {
       const n = allDesigns.filter((d) => d.page === c.id && (d.subclasses || []).some((x) => Shop.normTag(x) === Shop.normTag(s))).length;
       const chip = document.createElement('span');
       chip.className = 'tag';
       chip.title = `${n} ${n === 1 ? 'design' : 'designs'}`;
       chip.textContent = s;
-      const isPinned = c.pinned === s;
-      chip.classList.toggle('tag-pinned', isPinned);
-      const pin = document.createElement('button');
-      pin.type = 'button';
-      pin.className = 'tag-pin';
-      pin.textContent = isPinned ? '★' : '☆';
-      pin.title = isPinned ? `Pinned: the shop opens ${c.name} showing ${s}. Click to unpin.` : `Pin: open the ${c.name} page showing only ${s}`;
-      pin.setAttribute('aria-pressed', String(isPinned));
-      pin.setAttribute('aria-label', `Pin subclass ${s}`);
-      pin.addEventListener('click', () => pinSubclass(c, isPinned ? null : s));
-      chip.prepend(pin);
       const x = document.createElement('button');
       x.type = 'button';
       x.className = 'tag-remove';
@@ -196,20 +185,6 @@
     loadPublished();
   }
 
-  async function pinSubclass(c, name) {
-    try {
-      await adminFetch(`/api/collections/${encodeURIComponent(c.id)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pinned: name }),
-      });
-      setPageStatus(name ? `Pinned "${name}": the shop now opens ${c.name} showing only ${name}.` : `Unpinned: the shop opens ${c.name} showing all designs.`);
-    } catch (err) {
-      setPageStatus(err.message, true);
-    }
-    await loadPages();
-  }
-
   // ---- Change prices by subclass ----
   const bulkPage = document.getElementById('bulkPage');
   const bulkSub = document.getElementById('bulkSub');
@@ -241,7 +216,7 @@
     const page = collections.find((c) => c.id === bulkPage.value);
     const current = bulkSub.value;
     bulkSub.replaceChildren(new Option('All designs on this page', ''),
-      ...(page ? page.subclasses : []).map((s) => new Option(s, s, false, s === current)));
+      ...Shop.sortSubclasses(page ? page.subclasses : []).map((s) => new Option(s, s, false, s === current)));
     showBulkInfo();
   }
 

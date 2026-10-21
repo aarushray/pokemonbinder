@@ -95,8 +95,7 @@
   }
 
   // Show only the selected page's designs, optionally narrowed to one of the page's subclasses
-  // (e.g. Pokémon → Pikachu). The header dropdown switches pages. A page opens on the subclass the
-  // admin pinned, if any; customers can still choose "All designs".
+  // (e.g. Pokémon → Pikachu). The header dropdown switches pages.
   const heading = document.getElementById('designs-heading');
   const filtersEl = document.getElementById('tagFilters');
   let pageId = null;
@@ -117,13 +116,7 @@
     const subs = page.subclasses || [];
     if (subFilter && !subs.some((s) => Shop.normTag(s) === subFilter)) subFilter = null;
 
-    // Subclass filter dropdown: the pinned subclass first, then names starting with a number in
-    // numerical order ("4th" before "30th"), then the rest alphabetically.
-    const startsWithDigit = (s) => /^\d/.test(s);
-    const sorted = [...subs].sort((a, b) =>
-      (b === page.pinned) - (a === page.pinned) ||
-      startsWithDigit(b) - startsWithDigit(a) ||
-      a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+    const sorted = Shop.sortSubclasses(subs);
     const select = document.createElement('select');
     select.className = 'sub-filter';
     select.setAttribute('aria-label', 'Filter designs');
@@ -146,16 +139,11 @@
     history.replaceState(null, '', `?page=${encodeURIComponent(page.id)}`);
   }
 
-  const pinnedFilter = () => {
-    const page = collections.find((c) => c.id === pageId);
-    return page && page.pinned ? Shop.normTag(page.pinned) : null;
-  };
   window.addEventListener('pagechange', (e) => {
     pageId = e.detail;
-    subFilter = pinnedFilter();
+    subFilter = null;
     show();
   });
   pageId = Shop.currentPage(collections);
-  subFilter = pinnedFilter();
   show();
 })();

@@ -3,11 +3,10 @@
 // Layout: public/ holds everything the browser loads (HTML pages, css/, js/). Only public/ and
 // designs/ are served, so this file, package.json and .data/ never are.
 //
-// Data lives in designs/designs.json: { designs: [...], collections: [{ id, name, subclasses, pinned }],
+// Data lives in designs/designs.json: { designs: [...], collections: [{ id, name, subclasses }],
 // settings: { storeDiscount, bannerText, unavailable, featured } }. Discounts are whole percentages (0 = none).
 // settings.unavailable lists, per binder type, the colours not in stock: { '9-pocket': ['#395143'] }.
 // settings.featured lists design ids, in order, that the shop shows first on their page.
-// A page's `pinned` subclass (or null) is the filter the shop opens that page with.
 // Collections are the shop's pages. Each design belongs to one page (`page`, a collection id) and
 // may be tagged with some of that page's subclasses (`subclasses`), which the shop uses as filters.
 //
@@ -94,7 +93,7 @@ function readDb() {
   if (!Array.isArray(db.collections)) db.collections = DEFAULT_COLLECTIONS.map((c) => ({ ...c }));
   for (const c of db.collections) {
     if (!Array.isArray(c.subclasses)) c.subclasses = [];
-    if (!c.subclasses.includes(c.pinned)) c.pinned = null;
+    delete c.pinned; // no longer used
   }
   if (!db.settings || typeof db.settings !== 'object') db.settings = {};
   if (!Number.isInteger(db.settings.storeDiscount)) db.settings.storeDiscount = 0;
@@ -424,8 +423,8 @@ async function createCollection(req, res) {
   sendJson(res, 201, collection);
 }
 
-// Replaces a page's subclass list (the admin adds/removes them one at a time) and/or its pinned
-// subclass (null to unpin). Designs keep only the subclasses that still exist on their page.
+// Replaces a page's subclass list (the admin adds/removes them one at a time). Designs keep only
+// the subclasses that still exist on their page.
 async function updateCollection(id, req, res) {
   const body = JSON.parse(await readBody(req));
   const db = readDb();
@@ -440,11 +439,6 @@ async function updateCollection(id, req, res) {
       if (d.page === id) d.subclasses = (d.subclasses || []).filter((x) => keep.has(normTag(x)));
     }
   }
-  if (body.pinned !== undefined) {
-    page.pinned = body.pinned === null ? null : page.subclasses.find((s) => normTag(s) === normTag(body.pinned)) || null;
-    if (body.pinned !== null && !page.pinned) return sendJson(res, 400, { error: "That page doesn't have that subclass" });
-  }
-  if (!page.subclasses.includes(page.pinned)) page.pinned = null;
   writeDb(db);
   sendJson(res, 200, page);
 }
