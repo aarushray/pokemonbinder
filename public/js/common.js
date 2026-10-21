@@ -246,6 +246,15 @@ const Shop = (() => {
     return String(s).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
   }
 
+  // Subclasses in display order: names with the word "series" first, then names starting with a
+  // number ("4th" before "30th"), then the rest (e.g. Pokémon names) alphabetically. Within each
+  // group, numbers inside names sort numerically ("Series 2" before "Series 10").
+  function sortSubclasses(list) {
+    const group = (s) => (/\bseries\b/i.test(s) ? 0 : /^\d/.test(s) ? 1 : 2);
+    return [...list].sort((a, b) =>
+      group(a) - group(b) || a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+  }
+
   // The design's page id, or null if that page no longer exists.
   function pageOf(design, collections) {
     return collections.some((c) => c.id === design.page) ? design.page : null;
@@ -579,6 +588,6 @@ const Shop = (() => {
 
   return {
     unavailableFor, defaultBanner, saleBanner, coverSlides, isCustom, customPrice, addCustomToCart, customArtIds, priceFor, discountFor, sale, renderPrice, readCart, addToCart, setQty, clearCart, stashCart, restoreCart, pruneCart, loadDesigns, loadImage, money, thumbUrl, swatches, designType,
-    loadCatalog, normTag, pageOf, currentPage, setPage,
+    loadCatalog, normTag, sortSubclasses, pageOf, currentPage, setPage,
   };
 })();
