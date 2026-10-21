@@ -30,13 +30,38 @@
     <section class="panel pages-panel">
       <div class="group">
         <h2>Pages</h2>
-        <p class="note">Each page of the shop has its own subclasses, shown to customers as filters. Removing a page or subclass never deletes designs.</p>
+        <p class="note">Each page of the shop has its own subclasses, shown to customers as filters. Removing a page or subclass never deletes designs. Click the ☆ on a subclass to pin it: the shop then opens that page showing only that subclass (customers can still pick "All designs"). Click ★ to unpin.</p>
         <div id="pages" class="page-list"></div>
         <form id="addPageForm" class="add-page">
           <input id="newPage" maxlength="40" placeholder="New page name, e.g. Dragon Ball" aria-label="New page name" />
           <button class="btn" type="submit">Add page</button>
         </form>
         <p id="pageStatus" class="status" hidden></p>
+      </div>
+    </section>
+
+    <section class="panel bulk-price-panel">
+      <div class="group">
+        <h2>Change prices by subclass</h2>
+        <p class="note">Sets the same price on every design in a subclass at once (or on every design on the page). Velvet colours still add their surcharge on top, and discounts still apply.</p>
+        <form id="bulkPriceForm" class="add-page bulk-price-form">
+          <select id="bulkPage" aria-label="Page"></select>
+          <select id="bulkSub" aria-label="Subclass"></select>
+          <input id="bulkPrice" type="number" min="1" step="0.01" placeholder="New price" aria-label="New price" />
+          <button class="btn" type="submit">Apply</button>
+        </form>
+        <p id="bulkInfo" class="note bulk-info"></p>
+        <p id="bulkStatus" class="status" hidden></p>
+      </div>
+    </section>
+
+    <section class="panel featured-panel">
+      <div class="group">
+        <h2>Front of the shop</h2>
+        <p class="note">Featured designs are shown first on their page of the shop, in this order. Feature a design with "Feature at front" on it under Published below, then use the arrows to order them.</p>
+        <ol id="featured" class="featured-list"></ol>
+        <p id="featuredEmpty" class="note">No featured designs yet, so the shop shows the newest designs first.</p>
+        <p id="featuredStatus" class="status" hidden></p>
       </div>
     </section>
 

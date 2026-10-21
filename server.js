@@ -3,9 +3,11 @@
 // Layout: public/ holds everything the browser loads (HTML pages, css/, js/). Only public/ and
 // designs/ are served, so this file, package.json and .data/ never are.
 //
-// Data lives in designs/designs.json: { designs: [...], collections: [{ id, name, subclasses }],
-// settings: { storeDiscount, bannerText, unavailable } }. Discounts are whole percentages (0 = none).
+// Data lives in designs/designs.json: { designs: [...], collections: [{ id, name, subclasses, pinned }],
+// settings: { storeDiscount, bannerText, unavailable, featured } }. Discounts are whole percentages (0 = none).
 // settings.unavailable lists, per binder type, the colours not in stock: { '9-pocket': ['#395143'] }.
+// settings.featured lists design ids, in order, that the shop shows first on their page.
+// A page's `pinned` subclass (or null) is the filter the shop opens that page with.
 // Collections are the shop's pages. Each design belongs to one page (`page`, a collection id) and
 // may be tagged with some of that page's subclasses (`subclasses`), which the shop uses as filters.
 //
@@ -90,11 +92,16 @@ function readDb() {
     db = { designs: [] };
   }
   if (!Array.isArray(db.collections)) db.collections = DEFAULT_COLLECTIONS.map((c) => ({ ...c }));
-  for (const c of db.collections) if (!Array.isArray(c.subclasses)) c.subclasses = [];
+  for (const c of db.collections) {
+    if (!Array.isArray(c.subclasses)) c.subclasses = [];
+    if (!c.subclasses.includes(c.pinned)) c.pinned = null;
+  }
   if (!db.settings || typeof db.settings !== 'object') db.settings = {};
   if (!Number.isInteger(db.settings.storeDiscount)) db.settings.storeDiscount = 0;
   if (typeof db.settings.bannerText !== 'string') db.settings.bannerText = '';
   db.settings.unavailable = cleanStock(db.settings.unavailable);
+  const ids = new Set(db.designs.map((d) => d.id));
+  db.settings.featured = [...new Set(Array.isArray(db.settings.featured) ? db.settings.featured : [])].filter((id) => ids.has(id));
   return db;
 }
 
@@ -337,7 +344,11 @@ async function updateInventory(req, res) {
   sendJson(res, 200, { inventory: readInventory(), unavailable: db.settings.unavailable });
 }
 
-// A list (or comma-separated string) of short labels, trimmed, without duplicates.
+// Most subclasses one page can have.
+const MAX_SUBCLASSES = 200;
+
+// A list (or comma-separated string) of short labels, trimmed, without duplicates. Callers check
+// the length themselves, so nothing is dropped without saying so.
 function cleanNames(input) {
   const list = Array.isArray(input) ? input : String(input || '').split(',');
   const seen = new Set();
@@ -349,7 +360,7 @@ function cleanNames(input) {
       tags.push(tag);
     }
   }
-  return tags.slice(0, 20);
+  return tags;
 }
 
 async function createDesign(req, res) {
@@ -413,20 +424,63 @@ async function createCollection(req, res) {
   sendJson(res, 201, collection);
 }
 
-// Replaces a page's subclass list (the admin adds/removes them one at a time). Designs keep only
-// the subclasses that still exist on their page.
+// Replaces a page's subclass list (the admin adds/removes them one at a time) and/or its pinned
+// subclass (null to unpin). Designs keep only the subclasses that still exist on their page.
 async function updateCollection(id, req, res) {
   const body = JSON.parse(await readBody(req));
   const db = readDb();
   const page = db.collections.find((c) => c.id === id);
   if (!page) return sendJson(res, 404, { error: 'Page not found' });
-  page.subclasses = cleanNames(body.subclasses).slice(0, 50);
-  const keep = new Set(page.subclasses.map(normTag));
-  for (const d of db.designs) {
-    if (d.page === id) d.subclasses = (d.subclasses || []).filter((x) => keep.has(normTag(x)));
+  if (body.subclasses !== undefined) {
+    const subclasses = cleanNames(body.subclasses);
+    if (subclasses.length > MAX_SUBCLASSES) return sendJson(res, 400, { error: `A page can have at most ${MAX_SUBCLASSES} subclasses` });
+    page.subclasses = subclasses;
+    const keep = new Set(page.subclasses.map(normTag));
+    for (const d of db.designs) {
+      if (d.page === id) d.subclasses = (d.subclasses || []).filter((x) => keep.has(normTag(x)));
+    }
   }
+  if (body.pinned !== undefined) {
+    page.pinned = body.pinned === null ? null : page.subclasses.find((s) => normTag(s) === normTag(body.pinned)) || null;
+    if (body.pinned !== null && !page.pinned) return sendJson(res, 400, { error: "That page doesn't have that subclass" });
+  }
+  if (!page.subclasses.includes(page.pinned)) page.pinned = null;
   writeDb(db);
   sendJson(res, 200, page);
+}
+
+// POST /api/collections/<id>/price { subclass, price } (admin): sets the price of every design on a
+// page that's tagged with the subclass, or of every design on the page when subclass is empty.
+async function setCollectionPrice(id, req, res) {
+  const body = JSON.parse(await readBody(req, 4 * 1024));
+  const db = readDb();
+  const page = db.collections.find((c) => c.id === id);
+  if (!page) return sendJson(res, 404, { error: 'Page not found' });
+  const price = Math.round(Number(body.price) * 100) / 100;
+  if (!(price > 0 && price < 10000)) return sendJson(res, 400, { error: 'Price must be between 0 and 10000' });
+  const sub = body.subclass ? normTag(body.subclass) : null;
+  if (sub && !page.subclasses.some((s) => normTag(s) === sub)) return sendJson(res, 400, { error: "That page doesn't have that subclass" });
+  const now = new Date().toISOString();
+  let updated = 0;
+  for (const d of db.designs) {
+    if (d.page !== id || (sub && !(d.subclasses || []).some((x) => normTag(x) === sub))) continue;
+    d.price = price;
+    d.updatedAt = now;
+    updated++;
+  }
+  writeDb(db);
+  sendJson(res, 200, { updated, price });
+}
+
+// PATCH /api/featured { featured: [design ids] } (admin): the designs shown first in the shop, in order.
+async function updateFeatured(req, res) {
+  const body = JSON.parse(await readBody(req, 64 * 1024));
+  if (!Array.isArray(body.featured)) return sendJson(res, 400, { error: 'featured must be a list of design ids' });
+  const db = readDb();
+  const ids = new Set(db.designs.map((d) => d.id));
+  db.settings.featured = [...new Set(body.featured.map(String))].filter((x) => ids.has(x));
+  writeDb(db);
+  sendJson(res, 200, { featured: db.settings.featured });
 }
 
 // Removes a page only; its designs stay saved but are hidden from the shop until moved to another page.
@@ -447,6 +501,7 @@ function deleteDesign(id, res) {
     if (path.dirname(file) === DESIGNS_DIR) fs.rmSync(file, { force: true });
   }
   db.designs = db.designs.filter((d) => d.id !== id);
+  db.settings.featured = db.settings.featured.filter((x) => x !== id);
   writeDb(db);
   sendJson(res, 200, { ok: true });
 }
@@ -812,6 +867,10 @@ http.createServer(async (req, res) => {
       if (!(await requireAdmin(req, res))) return;
       return await updateSettings(req, res);
     }
+    if (pathname === '/api/featured' && req.method === 'PATCH') {
+      if (!(await requireAdmin(req, res))) return;
+      return await updateFeatured(req, res);
+    }
     if (pathname === '/api/messages' && req.method === 'POST') return await createMessage(req, res);
     if (pathname === '/api/messages' && req.method === 'GET') {
       if (!(await requireAdmin(req, res))) return;
@@ -834,6 +893,11 @@ http.createServer(async (req, res) => {
     if (page && req.method === 'PATCH') {
       if (!(await requireAdmin(req, res))) return;
       return await updateCollection(page[1], req, res);
+    }
+    const pagePrice = /^\/api\/collections\/([a-z0-9-]+)\/price$/.exec(pathname);
+    if (pagePrice && req.method === 'POST') {
+      if (!(await requireAdmin(req, res))) return;
+      return await setCollectionPrice(pagePrice[1], req, res);
     }
     const one = /^\/api\/designs\/([a-z0-9-]+)$/.exec(pathname);
     if (one && req.method === 'DELETE') {

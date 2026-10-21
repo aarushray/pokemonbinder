@@ -28,6 +28,7 @@
   // subclasses, which the shop shows as filters.
   let collections = [];
   let allDesigns = [];
+  let featured = []; // design ids shown first in the shop, in order
 
   const pageName = (id) => (collections.find((c) => c.id === id) || {}).name;
 
@@ -102,13 +103,17 @@
 
   async function loadPages() {
     try {
-      ({ designs: allDesigns, collections } = await Shop.loadCatalog(true));
+      let settings;
+      ({ designs: allDesigns, collections, settings } = await Shop.loadCatalog(true));
+      featured = settings.featured.filter((id) => allDesigns.some((d) => d.id === id));
     } catch {
       return;
     }
     pagesEl.replaceChildren(...collections.map(pageBlock));
     if (!collections.length) pagesEl.textContent = 'No pages yet. Add one below.';
     for (const refresh of [...pickers]) refresh();
+    renderBulkPrice();
+    renderFeatured();
   }
 
   // One page in the Pages list: name, design count, Remove, and its subclasses (add/remove).
@@ -135,6 +140,17 @@
       chip.className = 'tag';
       chip.title = `${n} ${n === 1 ? 'design' : 'designs'}`;
       chip.textContent = s;
+      const isPinned = c.pinned === s;
+      chip.classList.toggle('tag-pinned', isPinned);
+      const pin = document.createElement('button');
+      pin.type = 'button';
+      pin.className = 'tag-pin';
+      pin.textContent = isPinned ? '★' : '☆';
+      pin.title = isPinned ? `Pinned: the shop opens ${c.name} showing ${s}. Click to unpin.` : `Pin: open the ${c.name} page showing only ${s}`;
+      pin.setAttribute('aria-pressed', String(isPinned));
+      pin.setAttribute('aria-label', `Pin subclass ${s}`);
+      pin.addEventListener('click', () => pinSubclass(c, isPinned ? null : s));
+      chip.prepend(pin);
       const x = document.createElement('button');
       x.type = 'button';
       x.className = 'tag-remove';
@@ -177,6 +193,145 @@
       setPageStatus(err.message, true);
     }
     await loadPages();
+    loadPublished();
+  }
+
+  async function pinSubclass(c, name) {
+    try {
+      await adminFetch(`/api/collections/${encodeURIComponent(c.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pinned: name }),
+      });
+      setPageStatus(name ? `Pinned "${name}": the shop now opens ${c.name} showing only ${name}.` : `Unpinned: the shop opens ${c.name} showing all designs.`);
+    } catch (err) {
+      setPageStatus(err.message, true);
+    }
+    await loadPages();
+  }
+
+  // ---- Change prices by subclass ----
+  const bulkPage = document.getElementById('bulkPage');
+  const bulkSub = document.getElementById('bulkSub');
+  const bulkPrice = document.getElementById('bulkPrice');
+  const bulkInfo = document.getElementById('bulkInfo');
+  const bulkStatus = document.getElementById('bulkStatus');
+  const setBulkStatus = (msg, isError = false) => {
+    bulkStatus.hidden = !msg;
+    bulkStatus.textContent = msg;
+    bulkStatus.classList.toggle('error', isError);
+  };
+
+  // Designs the bulk price would change: on the chosen page, in the chosen subclass ('' = all).
+  function bulkTargets() {
+    const sub = bulkSub.value ? Shop.normTag(bulkSub.value) : null;
+    return allDesigns.filter((d) => d.page === bulkPage.value
+      && (!sub || (d.subclasses || []).some((x) => Shop.normTag(x) === sub)));
+  }
+
+  function showBulkInfo() {
+    const list = bulkTargets();
+    const prices = [...new Set(list.map((d) => Shop.money(d.price)))];
+    bulkInfo.textContent = list.length
+      ? `${list.length} ${list.length === 1 ? 'design' : 'designs'} will change. Current ${prices.length === 1 ? 'price' : 'prices'}: ${prices.join(', ')}.`
+      : 'No designs in this subclass yet.';
+  }
+
+  function fillBulkSubs() {
+    const page = collections.find((c) => c.id === bulkPage.value);
+    const current = bulkSub.value;
+    bulkSub.replaceChildren(new Option('All designs on this page', ''),
+      ...(page ? page.subclasses : []).map((s) => new Option(s, s, false, s === current)));
+    showBulkInfo();
+  }
+
+  function renderBulkPrice() {
+    const current = bulkPage.value;
+    bulkPage.replaceChildren(...collections.map((c) => new Option(c.name, c.id, false, c.id === current)));
+    fillBulkSubs();
+  }
+
+  bulkPage.addEventListener('change', fillBulkSubs);
+  bulkSub.addEventListener('change', showBulkInfo);
+  document.getElementById('bulkPriceForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const price = Number(bulkPrice.value);
+    if (!(price > 0 && price < 10000)) return setBulkStatus('Enter a price above 0.', true);
+    const count = bulkTargets().length;
+    if (!count) return setBulkStatus('There are no designs in that subclass to change.', true);
+    const what = bulkSub.value ? `"${bulkSub.value}"` : `on the ${pageName(bulkPage.value)} page`;
+    if (!confirm(`Set the price of ${count} ${count === 1 ? 'design' : 'designs'} ${what} to ${Shop.money(price)}?`)) return;
+    try {
+      const { updated } = await adminFetch(`/api/collections/${encodeURIComponent(bulkPage.value)}/price`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subclass: bulkSub.value, price }),
+      });
+      bulkPrice.value = '';
+      setBulkStatus(`Set ${updated} ${updated === 1 ? 'design' : 'designs'} ${what} to ${Shop.money(price)}.`);
+    } catch (err) {
+      setBulkStatus(err.message, true);
+    }
+    await loadPages();
+    loadPublished();
+  });
+
+  // ---- Front of the shop: featured designs, shown first in this order ----
+  const featuredEl = document.getElementById('featured');
+  const featuredStatus = document.getElementById('featuredStatus');
+  const setFeaturedStatus = (msg, isError = false) => {
+    featuredStatus.hidden = !msg;
+    featuredStatus.textContent = msg;
+    featuredStatus.classList.toggle('error', isError);
+  };
+
+  function renderFeatured() {
+    document.getElementById('featuredEmpty').hidden = featured.length > 0;
+    featuredEl.replaceChildren(...featured.map((id, i) => {
+      const d = allDesigns.find((x) => x.id === id);
+      const li = document.createElement('li');
+      li.className = 'featured-row';
+      const img = document.createElement('img');
+      img.src = Shop.thumbUrl(d);
+      img.alt = '';
+      const name = document.createElement('span');
+      name.className = 'featured-name';
+      name.textContent = d.name;
+      const where = document.createElement('span');
+      where.className = 'muted';
+      where.textContent = pageName(d.page) || 'Not on any page';
+      const move = (step, label, symbol) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn btn-outline btn-sm';
+        b.textContent = symbol;
+        b.setAttribute('aria-label', `${label} ${d.name}`);
+        b.disabled = !featured[i + step];
+        b.addEventListener('click', () => {
+          const next = [...featured];
+          [next[i], next[i + step]] = [next[i + step], next[i]];
+          saveFeatured(next, `Moved "${d.name}" ${step < 0 ? 'up' : 'down'}.`);
+        });
+        return b;
+      };
+      li.append(img, name, where, move(-1, 'Move up', '↑'), move(1, 'Move down', '↓'),
+        linkButton('Remove', () => saveFeatured(featured.filter((x) => x !== id), `"${d.name}" is no longer featured.`)));
+      return li;
+    }));
+  }
+
+  async function saveFeatured(list, message) {
+    try {
+      ({ featured } = await adminFetch('/api/featured', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ featured: list }),
+      }));
+      setFeaturedStatus(message);
+    } catch (err) {
+      setFeaturedStatus(err.message, true);
+    }
+    renderFeatured();
     loadPublished();
   }
 
@@ -490,9 +645,19 @@
         chip.textContent = t;
         tagList.appendChild(chip);
       }
+      const isFeatured = featured.includes(d.id);
+      const feature = linkButton(isFeatured ? 'Remove from front' : 'Feature at front', () => (isFeatured
+        ? saveFeatured(featured.filter((x) => x !== d.id), `"${d.name}" is no longer featured.`)
+        : saveFeatured([...featured, d.id], `"${d.name}" is now featured at the front of the shop.`)));
       const actions = document.createElement('div');
       actions.className = 'row';
-      actions.append(linkButton('Edit', showEdit), linkButton('Delete', () => deleteDesign(d)));
+      actions.append(linkButton('Edit', showEdit), feature, linkButton('Delete', () => deleteDesign(d)));
+      if (isFeatured) {
+        const badge = document.createElement('span');
+        badge.className = 'tag tag-featured';
+        badge.textContent = `★ Featured #${featured.indexOf(d.id) + 1}`;
+        tagList.prepend(badge);
+      }
       el.replaceChildren(img, title, meta, pages, tagList, actions);
     }
 

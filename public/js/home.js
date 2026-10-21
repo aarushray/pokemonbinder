@@ -14,8 +14,13 @@
     return;
   }
 
+  // Designs the admin featured come first, in the admin's order; the rest stay newest first.
+  const rank = (d) => {
+    const i = settings.featured.indexOf(d.id);
+    return i < 0 ? Infinity : i;
+  };
   const cards = [];
-  for (const d of designs) {
+  for (const d of [...designs].sort((a, b) => rank(a) - rank(b))) {
     const card = document.createElement('div');
     card.className = 'card';
 
@@ -90,7 +95,8 @@
   }
 
   // Show only the selected page's designs, optionally narrowed to one of the page's subclasses
-  // (e.g. Pokémon → Pikachu). The header dropdown switches pages.
+  // (e.g. Pokémon → Pikachu). The header dropdown switches pages. A page opens on the subclass the
+  // admin pinned, if any; customers can still choose "All designs".
   const heading = document.getElementById('designs-heading');
   const filtersEl = document.getElementById('tagFilters');
   let pageId = null;
@@ -111,10 +117,11 @@
     const subs = page.subclasses || [];
     if (subFilter && !subs.some((s) => Shop.normTag(s) === subFilter)) subFilter = null;
 
-    // Subclass filter dropdown: names starting with a number first, in numerical order
-    // ("4th" before "30th"), then the rest alphabetically.
+    // Subclass filter dropdown: the pinned subclass first, then names starting with a number in
+    // numerical order ("4th" before "30th"), then the rest alphabetically.
     const startsWithDigit = (s) => /^\d/.test(s);
     const sorted = [...subs].sort((a, b) =>
+      (b === page.pinned) - (a === page.pinned) ||
       startsWithDigit(b) - startsWithDigit(a) ||
       a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
     const select = document.createElement('select');
@@ -139,11 +146,16 @@
     history.replaceState(null, '', `?page=${encodeURIComponent(page.id)}`);
   }
 
+  const pinnedFilter = () => {
+    const page = collections.find((c) => c.id === pageId);
+    return page && page.pinned ? Shop.normTag(page.pinned) : null;
+  };
   window.addEventListener('pagechange', (e) => {
     pageId = e.detail;
-    subFilter = null;
+    subFilter = pinnedFilter();
     show();
   });
   pageId = Shop.currentPage(collections);
+  subFilter = pinnedFilter();
   show();
 })();

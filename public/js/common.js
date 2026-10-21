@@ -133,7 +133,8 @@ const Shop = (() => {
         storeDiscount = Number(db.settings && db.settings.storeDiscount) || 0;
         const bannerText = (db.settings && db.settings.bannerText) || '';
         stock = (db.settings && db.settings.unavailable) || {};
-        return { designs: db.designs || [], collections: db.collections || [], settings: { storeDiscount, bannerText, unavailable: stock } };
+        const featured = (db.settings && Array.isArray(db.settings.featured)) ? db.settings.featured : [];
+        return { designs: db.designs || [], collections: db.collections || [], settings: { storeDiscount, bannerText, unavailable: stock, featured } };
       });
       catalogPromise.catch(() => { catalogPromise = null; });
     }
