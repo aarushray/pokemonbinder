@@ -43,14 +43,14 @@
           <input id="fullName" maxlength="80" placeholder="Name" aria-label="Name" autocomplete="name" />
           <input id="phone" type="tel" maxlength="20" placeholder="Phone number" aria-label="Phone number" autocomplete="tel" />
           <input id="address" maxlength="200" placeholder="Address" aria-label="Address" autocomplete="street-address" />
-          <div class="details-row">
+          <div id="addressRow" class="details-row">
             <input id="unit" maxlength="20" placeholder="Unit number, e.g. #05-12 (optional)" aria-label="Unit number" autocomplete="address-line2" />
             <input id="postal" inputmode="numeric" maxlength="6" placeholder="Postal code" aria-label="Postal code" autocomplete="postal-code" />
           </div>
           <fieldset class="shipping-pick">
             <legend>Mailing</legend>
             <div id="shippingOptions" class="shipping-options"></div>
-            <p id="shippingNote" class="note" hidden>Toploader 9-slots and 12-slots binders are sent by courier only.</p>
+            <p id="shippingNote" class="note" hidden>Toploader 9-slots and 12-slots binders can't go by tracked mailing: choose courier or self collection.</p>
           </fieldset>
         </form>
       </div>

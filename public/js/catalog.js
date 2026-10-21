@@ -53,15 +53,18 @@
   const DEFAULT_TYPE = '9-pocket';
 
   // Delivery choices at checkout: one fee per order (SGD). A cart with any courierOnly binder type
-  // (too big to mail) can only go by courier; otherwise the customer picks.
+  // (too big to mail) can't go by tracked mailing; otherwise the customer picks.
+  // collect: the customer picks the order up, so no address is needed. `note` is shown under the name.
   const SHIPPING = [
     { id: 'mail', name: 'Tracked mailing', price: 3 },
     { id: 'courier', name: 'Courier', price: 6 },
+    { id: 'collect', name: 'Collect at 570168 / 510153', price: 0, collect: true,
+      note: 'Friday nights at 570168, weekends at 510153' },
   ];
   // The delivery choices for a cart holding these binder type ids.
   function shippingOptions(typeIds) {
     const courierOnly = typeIds.some((id) => (TYPES.find((t) => t.id === id) || {}).courierOnly);
-    return courierOnly ? SHIPPING.filter((s) => s.id === 'courier') : SHIPPING;
+    return courierOnly ? SHIPPING.filter((s) => s.id !== 'mail') : SHIPPING;
   }
 
   // The shop's pages (Pokémon, One Piece, ...) are managed on the admin page and stored with the

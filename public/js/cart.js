@@ -117,12 +117,13 @@
     document.getElementById('items').textContent = count;
     document.getElementById('subtotal').textContent = Shop.money(subtotal);
     const shipping = renderShipping(typeIds);
-    document.getElementById('shipping').textContent = Shop.money(shipping.price);
+    document.getElementById('shipping').textContent = shipping.price ? Shop.money(shipping.price) : 'Free';
     document.getElementById('total').textContent = Shop.money(subtotal + shipping.price);
   }
 
   // ---- Mailing ----
-  // Tracked mailing or courier; carts with a toploader 9-slots or 12-slots binder go by courier only.
+  // Tracked mailing, courier or self collection; carts with a toploader 9-slots or 12-slots binder
+  // can't be mailed. Self collection needs no address, so the address fields are hidden for it.
   // Returns the chosen option.
   function renderShipping(typeIds) {
     const options = Catalog.shippingOptions(typeIds);
@@ -142,16 +143,25 @@
         render();
       });
       const name = document.createElement('span');
+      name.className = 'shipping-name';
       name.textContent = s.name;
+      if (s.note) {
+        const note = document.createElement('small');
+        note.className = 'shipping-note';
+        note.textContent = s.note;
+        name.appendChild(note);
+      }
       const price = document.createElement('span');
       price.className = 'shipping-price';
-      price.textContent = Shop.money(s.price);
+      price.textContent = s.price ? Shop.money(s.price) : 'Free';
       label.append(radio, name, price);
       return label;
     }));
+    for (const el of [document.getElementById('address'), document.getElementById('addressRow')]) el.hidden = !!chosen.collect;
     return chosen;
   }
   const chosenShipping = () => (document.querySelector('input[name="shipping"]:checked') || {}).value;
+  const collecting = () => !!(Catalog.SHIPPING.find((s) => s.id === chosenShipping()) || {}).collect;
 
   // ---- Delivery details ----
   // Kept in this tab while the customer logs in, and filled from their profile (saved at their last
@@ -222,6 +232,7 @@
     if (d.contactMethod === 'gmail' && !/^[^\s@]+@gmail\.com$/i.test(d.contact)) return bad('contact', 'Please enter a Gmail address, e.g. name@gmail.com.');
     if (!d.name) return bad('name', 'Please enter your name.');
     if (!/^(\+?65[\s-]?)?[3689]\d{3}[\s-]?\d{4}$/.test(d.phone)) return bad('phone', 'Please enter a Singapore phone number, e.g. 9123 4567.');
+    if (collecting()) return ''; // no address needed
     if (!d.address) return bad('address', 'Please enter your address.');
     if (!/^\d{6}$/.test(d.postal)) return bad('postal', 'Please enter a 6-digit postal code.');
     return '';
@@ -310,11 +321,11 @@
     done();
     const contact = d.contactMethod === 'telegram' ? d.contact.replace(/^@/, '') : d.contact.toLowerCase();
 
-    // Remember the details on the customer's profile for next time.
-    Account.client.from('profiles').update({
-      full_name: d.name, phone: d.phone, contact_method: d.contactMethod, contact,
-      address: d.address, unit_number: d.unit || null, postal_code: d.postal, updated_at: new Date().toISOString(),
-    }).eq('id', user.id).then(() => {}, () => {});
+    // Remember the details on the customer's profile for next time (keeping their saved address when
+    // they collected this order).
+    const profile = { full_name: d.name, phone: d.phone, contact_method: d.contactMethod, contact, updated_at: new Date().toISOString() };
+    if (!collecting()) Object.assign(profile, { address: d.address, unit_number: d.unit || null, postal_code: d.postal });
+    Account.client.from('profiles').update(profile).eq('id', user.id).then(() => {}, () => {});
     try { sessionStorage.removeItem(DETAILS_KEY); } catch { /* nothing kept */ }
 
     pendingOrderId = null;

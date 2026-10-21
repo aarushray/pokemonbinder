@@ -642,6 +642,8 @@ input.own-discount:disabled { background: var(--surface); color: var(--muted); c
 .shipping-option:has(input:checked) { border-color: var(--text); }
 .shipping-option input { margin: 0; width: auto; accent-color: var(--text); }
 .shipping-price { margin-left: auto; font-weight: 500; }
+.shipping-name { display: flex; flex-direction: column; gap: 2px; }
+.shipping-note { font-size: 0.85rem; color: var(--muted); }
 .contact-pick { display: grid; grid-template-columns: 140px 1fr; gap: 12px; }
 .details-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .contact-pick select {

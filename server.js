@@ -676,8 +676,9 @@ function priceLine(item, user, db) {
   };
 }
 
-// Delivery details, checked with the same rules as the cart page.
-function checkDetails(d) {
+// Delivery details, checked with the same rules as the cart page. Orders being collected need no
+// address, and are saved without one.
+function checkDetails(d, collect) {
   const s = (v, max) => String(v ?? '').trim().slice(0, max);
   const out = {
     contact_method: s(d.contactMethod, 10), contact: s(d.contact, 100), customer_name: s(d.name, 80),
@@ -692,13 +693,15 @@ function checkDetails(d) {
   } else throw badRequest('Please choose how we should contact you.');
   if (!out.customer_name) throw badRequest('Please enter your name.');
   if (!/^(\+?65[\s-]?)?[3689]\d{3}[\s-]?\d{4}$/.test(out.phone)) throw badRequest('Please enter a Singapore phone number, e.g. 9123 4567.');
+  if (collect) return { ...out, address: null, unit_number: null, postal_code: null };
   if (!out.address) throw badRequest('Please enter your address.');
   if (!/^\d{6}$/.test(out.postal_code)) throw badRequest('Please enter a 6-digit postal code.');
   return out;
 }
 
 // POST /api/checkout { orderId, items, details, shipping } → { orderId, total }
-// shipping is 'mail' or 'courier'; the fee comes from catalog.js, and courier-only binders allow only that.
+// shipping is 'mail', 'courier' or 'collect'; the fee comes from catalog.js, and courier-only binders
+// can't be mailed.
 async function checkout(req, res) {
   const user = await customerFrom(req);
   if (!user) return sendJson(res, 401, { error: 'Please log in again to check out.' });
@@ -709,14 +712,14 @@ async function checkout(req, res) {
 
   const db = readDb();
   const items = body.items.map((i) => priceLine(i, user, db));
-  const details = checkDetails(body.details || {});
   const typeIds = items.map((l) => BINDER_TYPES.find((t) => t.name === l.binder_type).id);
   const shipping = shippingOptions(typeIds).find((s) => s.id === body.shipping);
   if (!shipping) {
     throw badRequest(body.shipping === 'mail'
-      ? 'Toploader 9-slots and 12-slots binders can only be sent by courier. Please choose Courier.'
+      ? "Toploader 9-slots and 12-slots binders can't go by tracked mailing. Please choose Courier or self collection."
       : 'Please choose a mailing option.');
   }
+  const details = checkDetails(body.details || {}, !!shipping.collect);
   const subtotal = cents(items.reduce((sum, l) => sum + l.unit_price * l.qty, 0)) / 100;
   const total = cents(subtotal + shipping.price) / 100;
 

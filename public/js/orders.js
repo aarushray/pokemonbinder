@@ -102,6 +102,7 @@
     if (o.phone) contactRow.append(' · ', link(`tel:${o.phone.replace(/[^0-9+]/g, '')}`, o.phone));
     lines.push(contactRow);
     if (o.address) lines.push(text('div', [o.address, o.unit_number, o.postal_code && `Singapore ${o.postal_code}`].filter(Boolean).join(', ')));
+    else if (Number(o.shipping_fee) === 0) lines.push(text('div', 'Self collection (570168 / 510153)'));
     if (o.account_email) lines.push(text('div', `Account: ${o.account_email}`, 'muted'));
     who.append(...lines);
 
@@ -137,7 +138,7 @@
     // Totals.
     const totals = text('div', '', 'admin-order-total');
     const total = o.total != null ? o.total : o.subtotal;
-    totals.textContent = `Subtotal ${Shop.money(o.subtotal)} · Shipping ${Shop.money(o.shipping_fee || 0)} · Total ${o.currency} ${Shop.money(total)}`;
+    totals.textContent = `Subtotal ${Shop.money(o.subtotal)} · Shipping ${Number(o.shipping_fee) ? Shop.money(o.shipping_fee) : 'Free'} · Total ${o.currency} ${Shop.money(total)}`;
 
     // Proof of payment uploaded by the customer: check it, then set the status to Paid.
     let proofRow = null;
