@@ -261,11 +261,11 @@ const Shop = (() => {
     return String(s).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
   }
 
-  // Subclasses in display order: names with the word "series" first, then names starting with a
-  // number ("4th" before "30th"), then the rest (e.g. Pokémon names) alphabetically. Within each
-  // group, numbers inside names sort numerically ("Series 2" before "Series 10").
+  // Subclasses in display order: "Designs on hand" first, then names with the word "series", then
+  // names starting with a number ("4th" before "30th"), then the rest (e.g. Pokémon names)
+  // alphabetically. Within each group, numbers inside names sort numerically ("Series 2" before "Series 10").
   function sortSubclasses(list) {
-    const group = (s) => (/\bseries\b/i.test(s) ? 0 : /^\d/.test(s) ? 1 : 2);
+    const group = (s) => (normTag(s) === normTag(ON_HAND) ? -1 : /\bseries\b/i.test(s) ? 0 : /^\d/.test(s) ? 1 : 2);
     return [...list].sort((a, b) =>
       group(a) - group(b) || a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
   }
