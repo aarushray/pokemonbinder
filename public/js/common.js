@@ -518,8 +518,13 @@ const Shop = (() => {
 
     let index = 0;
     let binder = null;
-    // Slides are drawn when first shown, and again after the binder changes.
+    // Slides are drawn when first shown, and again after the binder changes. Photos (designs on
+    // hand) are drawn as they are.
     function draw(sl) {
+      if (sl.photo && !sl.drawn) {
+        drawPhoto(sl.canvas, sl.photo);
+        sl.drawn = true;
+      }
       if (!binder || !sl.view || sl.drawn) return;
       Binder.render(sl.canvas, { ...binder.art, type: binder.type, color: binder.color, view: sl.view });
       sl.drawn = true;
@@ -559,6 +564,13 @@ const Shop = (() => {
         if (binder && binder.type === type && binder.color === color && binder.art.image === image
           && binder.art.fit === art.fit && binder.art.invert === art.invert) return;
         binder = { type, color, art: { image, fit: art.fit, invert: art.invert } };
+        redraw();
+      },
+      // Shows photos of the real binder's front and back instead of renders.
+      setPhotos(front, back) {
+        binder = null;
+        slides[0].photo = front;
+        slides[1].photo = back;
         redraw();
       },
     };

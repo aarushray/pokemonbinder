@@ -725,3 +725,5 @@ input.own-discount:disabled { background: var(--surface); color: var(--muted); c
   .header-right { gap: 2px; }
   .header-currency { display: none; }
 }
+.back-photo img { display: block; max-width: 120px; max-height: 160px; border-radius: 6px; margin-bottom: 6px; }
+.back-photo input[type="file"] { font-size: 0.85rem; max-width: 100%; }
