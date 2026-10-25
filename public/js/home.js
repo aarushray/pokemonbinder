@@ -15,12 +15,15 @@
   }
 
   // Designs the admin featured come first, in the admin's order; the rest stay newest first.
+  // Mini series designs (tagged with a "Mini Series" subclass, or named so) always go last,
+  // so newly posted designs appear above them.
   const rank = (d) => {
     const i = settings.featured.indexOf(d.id);
     return i < 0 ? Infinity : i;
   };
+  const isMini = (d) => [d.name, ...(d.subclasses || [])].some((s) => /\bmini ?series\b/.test(Shop.normTag(s)));
   const cards = [];
-  for (const d of [...designs].sort((a, b) => rank(a) - rank(b))) {
+  for (const d of [...designs].sort((a, b) => isMini(a) - isMini(b) || rank(a) - rank(b))) {
     const card = document.createElement('div');
     card.className = 'card';
 
