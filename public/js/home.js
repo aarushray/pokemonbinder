@@ -140,7 +140,8 @@
     filtersEl.replaceChildren(select);
     filtersEl.hidden = subs.length === 0;
 
-    const shown = subFilter ? onPage.filter((c) => c.subs.has(subFilter)) : onPage;
+    // Designs on hand only show under their own subclass, not in "All designs".
+    const shown = subFilter ? onPage.filter((c) => c.subs.has(subFilter)) : onPage.filter((c) => !Shop.isOnHand(c.design));
     grid.replaceChildren(...shown.map((c) => c.el));
     heading.textContent = `${page.name} designs`;
     count.textContent = `${shown.length} ${shown.length === 1 ? 'design' : 'designs'}`;

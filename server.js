@@ -664,6 +664,7 @@ function priceLine(item, user, db) {
   if (!type.colors.includes(color)) throw badRequest(`"${design.name}" isn't available in that colour.`);
   // Designs on hand are binders already made: sold only in their own colour, whatever the colour stock.
   const onHand = (design.subclasses || []).some((s) => normTag(s) === normTag(ON_HAND));
+  if (onHand && qty !== 1) throw badRequest(`"${design.name}" is one of a kind, so you can only order one.`);
   if (onHand && color !== design.color) throw badRequest(`"${design.name}" is a binder on hand and only comes in ${colorName(design.color)}. Please remove it and add it again.`);
   if (!onHand && outOfStock(db, type, color)) throw badRequest(`${type.name} binders in ${colorName(color)} are out of stock. Please choose another colour.`);
   const finish = finishOf(type, color);

@@ -41,7 +41,8 @@
     document.getElementById('cards').textContent = `Holds ${finish?.cards ?? design.cards ?? 540} pockets`;
     document.getElementById('madeToOrder').textContent = 'In stock: this is the binder you will receive';
     canvas.setAttribute('aria-label', `Photo of the ${design.name} binder`);
-    buyButtons(() => design.color);
+    document.querySelector('.qty').hidden = true; // one of a kind
+    buyButtons(() => design.color, 1);
     const photo = await Shop.loadImage(design.art).catch(() => null);
     if (photo) Shop.drawPhoto(canvas, photo);
     return;
@@ -133,12 +134,13 @@
 
   buyButtons(() => color);
 
-  // Quantity buttons and "Add to cart", adding the binder in the colour getColor() returns.
-  function buyButtons(getColor) {
+  // Quantity buttons and "Add to cart", adding the binder in the colour getColor() returns, at
+  // most `max` in the cart.
+  function buyButtons(getColor, max = 20) {
     let qty = 1;
     const qtyEl = document.getElementById('qty');
     const setQty = (n) => {
-      qty = Math.max(1, Math.min(20, n));
+      qty = Math.max(1, Math.min(max, n));
       qtyEl.textContent = qty;
     };
     document.getElementById('minus').addEventListener('click', () => setQty(qty - 1));
@@ -146,7 +148,7 @@
 
     const added = document.getElementById('added');
     document.getElementById('addBtn').addEventListener('click', () => {
-      Shop.addToCart(design.id, getColor(), qty);
+      Shop.addToCart(design.id, getColor(), qty, max);
       added.hidden = false;
     });
   }
