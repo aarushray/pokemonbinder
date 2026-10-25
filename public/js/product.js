@@ -43,8 +43,10 @@
     canvas.setAttribute('aria-label', `Photo of the ${design.name} binder`);
     document.querySelector('.qty').hidden = true; // one of a kind
     buyButtons(() => design.color, 1);
-    const photo = await Shop.loadImage(design.art).catch(() => null);
+    const [photo, back] = await Promise.all([design.art, design.back]
+      .map((src) => (src ? Shop.loadImage(src).catch(() => null) : null)));
     if (photo) Shop.drawPhoto(canvas, photo);
+    if (photo && back) Shop.coverSlides(canvas).setPhotos(photo, back); // front/back arrows
     return;
   }
 

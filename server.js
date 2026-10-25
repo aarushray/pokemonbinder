@@ -8,7 +8,8 @@
 // settings.unavailable lists, per binder type, the colours not in stock: { '9-pocket': ['#395143'] }.
 // settings.featured lists design ids, in order, that the shop shows first on their page.
 // A design on hand (one of a kind) gets soldOrderId once someone orders it, which hides it from the
-// shop; cancelling that order (or "Put back on sale" on the admin page) clears it.
+// shop; cancelling that order (or "Put back on sale" on the admin page) clears it. It may also have
+// `back`, a photo of the binder's back cover.
 // Collections are the shop's pages. Each design belongs to one page (`page`, a collection id) and
 // may be tagged with some of that page's subclasses (`subclasses`), which the shop uses as filters.
 //
@@ -228,6 +229,12 @@ function saveDataUrl(dataUrl, baseName) {
   return `designs/${file}`;
 }
 
+// Deletes one of a design's image files (a path like designs/x-art.jpg).
+function removeDesignFile(rel) {
+  const file = path.join(DESIGNS_DIR, path.basename(rel));
+  if (path.dirname(file) === DESIGNS_DIR) fs.rmSync(file, { force: true });
+}
+
 function slug(s) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'design';
 }
@@ -384,12 +391,14 @@ async function createDesign(req, res) {
     thumb: saveDataUrl(body.thumb, `${id}-thumb`),
     createdAt: new Date().toISOString(),
   };
+  if (body.back) design.back = saveDataUrl(body.back, `${id}-back`);
   db.designs.unshift(design);
   writeDb(db);
   sendJson(res, 201, design);
 }
 
 // Updates a design's details. A new thumbnail is optional (sent when the type or colour changed).
+// `back` is a new back-cover photo; `removeBack: true` deletes the current one.
 async function updateDesign(id, req, res) {
   const body = JSON.parse(await readBody(req));
   const db = readDb();
@@ -405,6 +414,11 @@ async function updateDesign(id, req, res) {
       if (path.dirname(old) === DESIGNS_DIR) fs.rmSync(old, { force: true });
     }
     design.thumb = thumb;
+  }
+  if (body.back || body.removeBack) {
+    if (design.back) removeDesignFile(design.back);
+    delete design.back;
+    if (body.back) design.back = saveDataUrl(body.back, `${id}-back`);
   }
   Object.assign(design, fields, { updatedAt: new Date().toISOString() });
   delete design.genre;
@@ -508,10 +522,7 @@ function deleteDesign(id, res) {
   const db = readDb();
   const design = db.designs.find((d) => d.id === id);
   if (!design) return sendJson(res, 404, { error: 'Design not found' });
-  for (const rel of [design.art, design.thumb]) {
-    const file = path.join(DESIGNS_DIR, path.basename(rel));
-    if (path.dirname(file) === DESIGNS_DIR) fs.rmSync(file, { force: true });
-  }
+  for (const rel of [design.art, design.thumb, design.back]) if (rel) removeDesignFile(rel);
   db.designs = db.designs.filter((d) => d.id !== id);
   db.settings.featured = db.settings.featured.filter((x) => x !== id);
   writeDb(db);

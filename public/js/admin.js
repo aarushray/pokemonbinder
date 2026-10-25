@@ -371,6 +371,39 @@
     loadPublished();
   });
 
+  // "Back photo" picker for designs on hand: a file input with a small preview. onPick(file) gets
+  // the chosen photo, or null when it's cleared. `current` is the saved photo's URL, if any.
+  function backPhotoField(onPick, current = null) {
+    const wrap = document.createElement('div');
+    wrap.className = 'field back-photo';
+    const label = document.createElement('span');
+    label.textContent = 'Back photo (optional)';
+    const preview = document.createElement('img');
+    preview.alt = 'Back of the binder';
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg,image/webp';
+    const clear = linkButton('Remove back photo', () => {
+      input.value = '';
+      show(null);
+      onPick(null);
+    });
+    const show = (src) => {
+      preview.hidden = !src;
+      clear.hidden = !src;
+      if (src) preview.src = src;
+    };
+    input.addEventListener('change', () => {
+      const file = input.files[0];
+      if (!file || !/^image\/(png|jpeg|webp)$/.test(file.type)) return;
+      show(URL.createObjectURL(file));
+      onPick(file);
+    });
+    show(current);
+    wrap.append(label, preview, input, clear);
+    return wrap;
+  }
+
   function buildQueueItem(item) {
     const el = document.createElement('div');
     el.className = 'queue-item';
@@ -407,7 +440,9 @@
     name.addEventListener('input', () => { item.name = name.value; });
     nameField.appendChild(name);
 
-    const pagePicker = pageField(item, () => { checkRatio(); draw(); });
+    const backField = backPhotoField((file) => { item.backFile = file; });
+    const showBack = () => { backField.hidden = !Shop.isOnHand(item); };
+    const pagePicker = pageField(item, () => { checkRatio(); draw(); showBack(); });
 
     const colorField = document.createElement('label');
     colorField.className = 'field';
@@ -463,8 +498,9 @@
       renderQueue();
     });
 
-    el.append(canvas, warn, nameField, pagePicker, typeField, colorField, cardsField, discountField, remove);
+    el.append(canvas, warn, nameField, pagePicker, backField, typeField, colorField, cardsField, discountField, remove);
     item.el = el;
+    showBack();
     fillColors();
     checkRatio();
     draw();
@@ -529,6 +565,7 @@
             cards: Number(item.cards),
             discount: item.discount === '' ? 0 : Number(item.discount),
             art: await fileToDataUrl(item.file),
+            back: Shop.isOnHand(item) && item.backFile ? await fileToDataUrl(item.backFile) : undefined,
             thumb: thumbCanvas.toDataURL('image/webp', 0.85),
           }),
         });
@@ -669,10 +706,15 @@
       const canvas = document.createElement('canvas');
       let art = null;
       const draw = () => {
+        backField.hidden = !Shop.isOnHand(draft);
         if (!art) return;
         if (Shop.isOnHand(draft)) Shop.drawPhoto(canvas, art, 500);
         else Binder.render(canvas, { image: art, color: draft.color, type: draft.type, scale: 0.25 });
       };
+      // undefined: keep the saved back photo; a File: replace it; null: remove it.
+      let backChange;
+      const backField = backPhotoField((file) => { backChange = file; }, d.back || null);
+      backField.hidden = !Shop.isOnHand(draft);
       Shop.loadImage(d.art).then((img) => { art = img; draw(); }).catch(() => {});
 
       const name = document.createElement('input');
@@ -734,6 +776,8 @@
         error.hidden = true;
         save.disabled = true;
         const body = { name: draft.name.trim(), page: draft.page, subclasses: draft.subclasses, type: draft.type, color: draft.color, cards: Number(draft.cards), price: Number(draft.price), discount: draft.discount === '' ? 0 : Number(draft.discount) };
+        if (backChange) body.back = await fileToDataUrl(backChange);
+        else if (backChange === null) body.removeBack = true;
         // The shop thumbnail shows the type and colour (or the photo, for designs on hand), so
         // redraw it when any of those changed.
         const onHand = Shop.isOnHand(draft);
@@ -755,6 +799,7 @@
           error.hidden = false;
           return;
         }
+        delete d.back; // the saved design says whether it still has one
         Object.assign(d, await res.json());
         showView();
       });
@@ -763,7 +808,7 @@
       actions.className = 'row';
       actions.append(save, linkButton('Cancel', showView));
 
-      el.replaceChildren(canvas, field('Name', name), pageField(draft, draw),
+      el.replaceChildren(canvas, field('Name', name), pageField(draft, draw), backField,
         field('Binder type', typeSelect),
         field('Binder colour', colorSelect), sizeRow, field('Discount % (optional)', discount), error, actions);
     }
