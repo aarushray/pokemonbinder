@@ -39,7 +39,7 @@
       shape: { spine: 44, radius: 80, tab: false, display: 0.68 } },
     { id: '4-pocket-toploader', name: '4-slots toploader', pockets: 4, capacity: 112, basePrice: 80, ratio: [2, 3], colors: DIAMOND,
       shape: { spine: 50, radius: 80, tab: false, display: 0.88 } },
-    { id: '9-pocket', name: '9-slots', pockets: 9, capacity: 360, basePrice: 80, ratio: [2, 3], colors: [...DIAMOND, ...VELVET],
+    { id: '9-pocket', name: '9-slots', pockets: 9, capacity: 360, basePrice: 90, ratio: [2, 3], colors: [...DIAMOND, ...VELVET],
       finishes: [
         { id: 'diamond', name: 'PU Leather', colors: DIAMOND },
         { id: 'velvet', name: 'Velvet texture', colors: VELVET, cards: 540, extraPrice: 5 },
@@ -47,7 +47,7 @@
       shape: { spine: 36, radius: 72, tab: false } },
     { id: '9-pocket-toploader', name: '9-slots toploader', pockets: 9, capacity: 252, basePrice: 100, ratio: [4, 5], colors: DIAMOND, courierOnly: true,
       shape: { spine: 60, radius: 72, tab: false } },
-    { id: '12-pocket', name: '12-slots', pockets: 12, capacity: 480, basePrice: 90, ratio: [4, 5], colors: DIAMOND, courierOnly: true,
+    { id: '12-pocket', name: '12-slots', pockets: 12, capacity: 480, basePrice: 95, ratio: [4, 5], colors: DIAMOND, courierOnly: true,
       shape: { spine: 75, radius: 60, tab: false } },
   ];
   const DEFAULT_TYPE = '9-pocket';
