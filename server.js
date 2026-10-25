@@ -7,6 +7,8 @@
 // settings: { storeDiscount, bannerText, unavailable, featured } }. Discounts are whole percentages (0 = none).
 // settings.unavailable lists, per binder type, the colours not in stock: { '9-pocket': ['#395143'] }.
 // settings.featured lists design ids, in order, that the shop shows first on their page.
+// A design on hand (one of a kind) gets soldOrderId once someone orders it, which hides it from the
+// shop; cancelling that order (or "Put back on sale" on the admin page) clears it.
 // Collections are the shop's pages. Each design belongs to one page (`page`, a collection id) and
 // may be tagged with some of that page's subclasses (`subclasses`), which the shop uses as filters.
 //
@@ -346,6 +348,7 @@ async function updateInventory(req, res) {
 // Subclass for binders already engraved and in stock; their image is a photo of the real binder.
 // Every page has it, so it can't be removed.
 const ON_HAND = 'Designs on hand';
+const isOnHand = (design) => (design.subclasses || []).some((s) => normTag(s) === normTag(ON_HAND));
 const withOnHand = (list) => (list.some((s) => normTag(s) === normTag(ON_HAND)) ? list : [...list, ON_HAND]);
 
 // Most subclasses one page can have.
@@ -491,6 +494,16 @@ function deleteCollection(id, res) {
   sendJson(res, 200, { ok: true });
 }
 
+// POST /api/designs/<id>/relist (admin): puts a sold design on hand back on sale.
+function relistDesign(id, res) {
+  const db = readDb();
+  const design = db.designs.find((d) => d.id === id);
+  if (!design) return sendJson(res, 404, { error: 'Design not found' });
+  delete design.soldOrderId;
+  writeDb(db);
+  sendJson(res, 200, design);
+}
+
 function deleteDesign(id, res) {
   const db = readDb();
   const design = db.designs.find((d) => d.id === id);
@@ -589,6 +602,7 @@ async function updateOrderStatus(id, req, res) {
     body: JSON.stringify({ status }),
   });
   if (!rows.length) return sendJson(res, 404, { error: 'Order not found' });
+  if (status === 'cancelled') releaseOnHand(id); // its designs on hand go back on sale
   sendJson(res, 200, rows[0]);
 }
 
@@ -665,7 +679,8 @@ function priceLine(item, user, db) {
   const type = BINDER_TYPES.find((t) => t.id === design.type) || BINDER_TYPES.find((t) => t.id === '9-pocket');
   if (!type.colors.includes(color)) throw badRequest(`"${design.name}" isn't available in that colour.`);
   // Designs on hand are binders already made: sold only in their own colour, whatever the colour stock.
-  const onHand = (design.subclasses || []).some((s) => normTag(s) === normTag(ON_HAND));
+  const onHand = isOnHand(design);
+  if (onHand && design.soldOrderId) throw badRequest(`Sorry, "${design.name}" has just been sold. Please remove it from your cart.`);
   if (onHand && qty !== 1) throw badRequest(`"${design.name}" is one of a kind, so you can only order one.`);
   if (onHand && color !== design.color) throw badRequest(`"${design.name}" is a binder on hand and only comes in ${colorName(design.color)}. Please remove it and add it again.`);
   if (!onHand && outOfStock(db, type, color)) throw badRequest(`${type.name} binders in ${colorName(color)} are out of stock. Please choose another colour.`);
@@ -728,15 +743,43 @@ async function checkout(req, res) {
 
   const [existing] = await supa(`/rest/v1/orders?select=id&id=eq.${orderId}`);
   if (existing) return sendJson(res, 409, { error: 'This order has already been placed. Please refresh the cart page.' });
-  await supa('/rest/v1/orders', {
-    method: 'POST',
-    body: JSON.stringify({
-      id: orderId, user_id: user.id, status: 'pending',
-      items, item_count: items.reduce((n, l) => n + l.qty, 0), subtotal, shipping_fee: shipping.price, total,
-      ...details,
-    }),
-  });
+  const onHandIds = reserveOnHand(items, orderId);
+  try {
+    await supa('/rest/v1/orders', {
+      method: 'POST',
+      body: JSON.stringify({
+        id: orderId, user_id: user.id, status: 'pending',
+        items, item_count: items.reduce((n, l) => n + l.qty, 0), subtotal, shipping_fee: shipping.price, total,
+        ...details,
+      }),
+    });
+  } catch (err) {
+    releaseOnHand(orderId, onHandIds);
+    throw err;
+  }
   sendJson(res, 200, { orderId, total });
+}
+
+// Marks the order's designs on hand as sold, so the shop hides them and nobody else can buy them.
+// Reads and writes the file with nothing in between, so two checkouts can't both get the same one.
+// Returns the ids marked.
+function reserveOnHand(items, orderId) {
+  const db = readDb();
+  const designs = items.map((l) => db.designs.find((d) => d.id === l.design_id)).filter((d) => d && isOnHand(d));
+  const taken = designs.find((d) => d.soldOrderId);
+  if (taken) throw badRequest(`Sorry, "${taken.name}" has just been sold. Please remove it from your cart.`);
+  if (!designs.length) return [];
+  for (const d of designs) d.soldOrderId = orderId;
+  writeDb(db);
+  return designs.map((d) => d.id);
+}
+
+// Puts an order's designs on hand back on sale (all of them, or only `ids`).
+function releaseOnHand(orderId, ids = null) {
+  const db = readDb();
+  const designs = db.designs.filter((d) => d.soldOrderId === orderId && (!ids || ids.includes(d.id)));
+  for (const d of designs) delete d.soldOrderId;
+  if (designs.length) writeDb(db);
 }
 
 // ─── PayNow payment proof ──────────────────────────────────────────────────────────────
@@ -909,6 +952,11 @@ http.createServer(async (req, res) => {
     if (one && req.method === 'DELETE') {
       if (!(await requireAdmin(req, res))) return;
       return deleteDesign(one[1], res);
+    }
+    const relist = /^\/api\/designs\/([a-z0-9-]+)\/relist$/.exec(pathname);
+    if (relist && req.method === 'POST') {
+      if (!(await requireAdmin(req, res))) return;
+      return relistDesign(relist[1], res);
     }
     if (one && req.method === 'PATCH') {
       if (!(await requireAdmin(req, res))) return;
