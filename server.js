@@ -92,7 +92,7 @@ function readDb() {
   }
   if (!Array.isArray(db.collections)) db.collections = DEFAULT_COLLECTIONS.map((c) => ({ ...c }));
   for (const c of db.collections) {
-    if (!Array.isArray(c.subclasses)) c.subclasses = [];
+    c.subclasses = withOnHand(Array.isArray(c.subclasses) ? c.subclasses : []);
     delete c.pinned; // no longer used
   }
   if (!db.settings || typeof db.settings !== 'object') db.settings = {};
@@ -344,7 +344,9 @@ async function updateInventory(req, res) {
 }
 
 // Subclass for binders already engraved and in stock; their image is a photo of the real binder.
+// Every page has it, so it can't be removed.
 const ON_HAND = 'Designs on hand';
+const withOnHand = (list) => (list.some((s) => normTag(s) === normTag(ON_HAND)) ? list : [...list, ON_HAND]);
 
 // Most subclasses one page can have.
 const MAX_SUBCLASSES = 200;
@@ -420,7 +422,7 @@ async function createCollection(req, res) {
   const base = slug(normTag(name));
   let id = base;
   for (let n = 2; db.collections.some((c) => c.id === id); n++) id = `${base}-${n}`;
-  const collection = { id, name, subclasses: [] };
+  const collection = { id, name, subclasses: [ON_HAND] };
   db.collections.push(collection);
   writeDb(db);
   sendJson(res, 201, collection);
@@ -434,7 +436,7 @@ async function updateCollection(id, req, res) {
   const page = db.collections.find((c) => c.id === id);
   if (!page) return sendJson(res, 404, { error: 'Page not found' });
   if (body.subclasses !== undefined) {
-    const subclasses = cleanNames(body.subclasses);
+    const subclasses = withOnHand(cleanNames(body.subclasses));
     if (subclasses.length > MAX_SUBCLASSES) return sendJson(res, 400, { error: `A page can have at most ${MAX_SUBCLASSES} subclasses` });
     page.subclasses = subclasses;
     const keep = new Set(page.subclasses.map(normTag));

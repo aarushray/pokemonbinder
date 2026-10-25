@@ -127,7 +127,9 @@
     const subs = page.subclasses || [];
     if (subFilter && !subs.some((s) => Shop.normTag(s) === subFilter)) subFilter = null;
 
-    const sorted = Shop.sortSubclasses(subs);
+    // "Designs on hand" is on every page; only offer it when the page has some.
+    const sorted = Shop.sortSubclasses(subs).filter((s) => Shop.normTag(s) !== Shop.normTag(Shop.ON_HAND)
+      || onPage.some((c) => Shop.isOnHand(c.design)));
     const select = document.createElement('select');
     select.className = 'sub-filter';
     select.setAttribute('aria-label', 'Filter designs');
@@ -138,7 +140,7 @@
       show();
     });
     filtersEl.replaceChildren(select);
-    filtersEl.hidden = subs.length === 0;
+    filtersEl.hidden = sorted.length === 0;
 
     // Designs on hand only show under their own subclass, not in "All designs".
     const shown = subFilter ? onPage.filter((c) => c.subs.has(subFilter)) : onPage.filter((c) => !Shop.isOnHand(c.design));
