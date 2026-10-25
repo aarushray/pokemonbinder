@@ -149,7 +149,7 @@
       x.textContent = '×';
       x.setAttribute('aria-label', `Remove subclass ${s}`);
       x.addEventListener('click', () => removeSubclass(c, s, n));
-      chip.appendChild(x);
+      if (Shop.normTag(s) !== Shop.normTag(Shop.ON_HAND)) chip.appendChild(x); // built in, can't be removed
       subs.appendChild(chip);
     }
     const form = document.createElement('form');
