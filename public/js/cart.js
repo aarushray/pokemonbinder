@@ -57,6 +57,13 @@
     const typeIds = [];
     for (const item of items) {
       const { name: title, href, type, unit } = describe(item);
+      // Designs on hand are one of a kind: one per order.
+      const onHand = !Shop.isCustom(item) && Shop.isOnHand(byId.get(item.id));
+      const maxQty = onHand ? 1 : 20;
+      if (item.qty > maxQty) {
+        item.qty = maxQty;
+        Shop.setQty(item.id, item.color, maxQty);
+      }
       typeIds.push(type.id);
       total += unit.price * item.qty;
       count += item.qty;
@@ -69,7 +76,8 @@
       if (href) thumb.href = href;
       const canvas = document.createElement('canvas');
       thumb.appendChild(canvas);
-      art(item).then((img) => Binder.render(canvas, { image: img, color: item.color, type: type.id, scale: 0.15 }));
+      art(item).then((img) => (onHand && img ? Shop.drawPhoto(canvas, img, 300)
+        : Binder.render(canvas, { image: img, color: item.color, type: type.id, scale: 0.15 })));
 
       const info = document.createElement('div');
       const name = document.createElement(href ? 'a' : 'span');
@@ -100,7 +108,8 @@
       plus.type = 'button';
       plus.textContent = '+';
       plus.setAttribute('aria-label', 'Increase quantity');
-      plus.addEventListener('click', () => { Shop.setQty(item.id, item.color, Math.min(20, item.qty + 1)); render(); });
+      plus.addEventListener('click', () => { Shop.setQty(item.id, item.color, Math.min(maxQty, item.qty + 1)); render(); });
+      plus.disabled = item.qty >= maxQty;
       qty.append(minus, n, plus);
       const remove = document.createElement('button');
       remove.type = 'button';

@@ -343,6 +343,9 @@ async function updateInventory(req, res) {
   sendJson(res, 200, { inventory: readInventory(), unavailable: db.settings.unavailable });
 }
 
+// Subclass for binders already engraved and in stock; their image is a photo of the real binder.
+const ON_HAND = 'Designs on hand';
+
 // Most subclasses one page can have.
 const MAX_SUBCLASSES = 200;
 
@@ -659,7 +662,11 @@ function priceLine(item, user, db) {
   if (!design) throw badRequest('Something in your cart is no longer sold. Please refresh the cart page.');
   const type = BINDER_TYPES.find((t) => t.id === design.type) || BINDER_TYPES.find((t) => t.id === '9-pocket');
   if (!type.colors.includes(color)) throw badRequest(`"${design.name}" isn't available in that colour.`);
-  if (outOfStock(db, type, color)) throw badRequest(`${type.name} binders in ${colorName(color)} are out of stock. Please choose another colour.`);
+  // Designs on hand are binders already made: sold only in their own colour, whatever the colour stock.
+  const onHand = (design.subclasses || []).some((s) => normTag(s) === normTag(ON_HAND));
+  if (onHand && qty !== 1) throw badRequest(`"${design.name}" is one of a kind, so you can only order one.`);
+  if (onHand && color !== design.color) throw badRequest(`"${design.name}" is a binder on hand and only comes in ${colorName(design.color)}. Please remove it and add it again.`);
+  if (!onHand && outOfStock(db, type, color)) throw badRequest(`${type.name} binders in ${colorName(color)} are out of stock. Please choose another colour.`);
   const finish = finishOf(type, color);
   const original = design.price + ((finish && finish.extraPrice) || 0);
   const discount = db.settings.storeDiscount > 0 ? db.settings.storeDiscount : design.discount || 0;

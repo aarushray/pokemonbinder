@@ -65,6 +65,14 @@
     body.append(left, price);
     link.append(media, body);
 
+    // Designs on hand are a photo of the real binder, so they only come in that one colour.
+    if (Shop.isOnHand(d)) {
+      sub.textContent = `${subText(d.color)} · In stock`;
+      card.append(link);
+      cards.push({ el: card, design: d, subs: new Set((d.subclasses || []).map(Shop.normTag)) });
+      continue;
+    }
+
     // Other colours are rendered on demand from the full artwork (loaded on first use).
     let art = null;
     let current = d.color;
@@ -132,7 +140,8 @@
     filtersEl.replaceChildren(select);
     filtersEl.hidden = subs.length === 0;
 
-    const shown = subFilter ? onPage.filter((c) => c.subs.has(subFilter)) : onPage;
+    // Designs on hand only show under their own subclass, not in "All designs".
+    const shown = subFilter ? onPage.filter((c) => c.subs.has(subFilter)) : onPage.filter((c) => !Shop.isOnHand(c.design));
     grid.replaceChildren(...shown.map((c) => c.el));
     heading.textContent = `${page.name} designs`;
     count.textContent = `${shown.length} ${shown.length === 1 ? 'design' : 'designs'}`;

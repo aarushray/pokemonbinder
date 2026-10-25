@@ -25,11 +25,12 @@ const Shop = (() => {
     return Binder.getType(design.type);
   }
 
-  function addToCart(id, color, qty) {
+  // `max` caps the line's quantity (designs on hand are one of a kind).
+  function addToCart(id, color, qty, max = Infinity) {
     const items = readCart();
     const line = items.find((i) => i.id === id && i.color === color);
-    if (line) line.qty += qty;
-    else items.push({ id, color, qty });
+    if (line) line.qty = Math.min(max, line.qty + qty);
+    else items.push({ id, color, qty: Math.min(max, qty) });
     writeCart(items);
   }
 
@@ -195,6 +196,20 @@ const Shop = (() => {
     badge.className = 'sale-badge';
     badge.textContent = `-${info.discount}%`;
     el.replaceChildren(was, ' ', now, ' ', badge);
+  }
+
+  // "Designs on hand": binders already engraved and in stock. Their uploaded image is a photo of
+  // the real binder, shown as it is instead of being rendered onto a binder, in its one colour.
+  // Each is one of a kind, so it can only be bought one at a time.
+  const ON_HAND = 'Designs on hand';
+  const isOnHand = (d) => (d.subclasses || []).some((s) => normTag(s) === normTag(ON_HAND));
+
+  // Draws a photo into a canvas, shrunk to at most `max` px on its longer side.
+  function drawPhoto(canvas, image, max = Infinity) {
+    const k = Math.min(1, max / Math.max(image.naturalWidth, image.naturalHeight));
+    canvas.width = Math.round(image.naturalWidth * k);
+    canvas.height = Math.round(image.naturalHeight * k);
+    canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
   }
 
   // Thumbnail URL that changes when the design is edited, so browsers don't show a stale image.
@@ -588,6 +603,6 @@ const Shop = (() => {
 
   return {
     unavailableFor, defaultBanner, saleBanner, coverSlides, isCustom, customPrice, addCustomToCart, customArtIds, priceFor, discountFor, sale, renderPrice, readCart, addToCart, setQty, clearCart, stashCart, restoreCart, pruneCart, loadDesigns, loadImage, money, thumbUrl, swatches, designType,
-    loadCatalog, normTag, sortSubclasses, pageOf, currentPage, setPage,
+    loadCatalog, normTag, sortSubclasses, pageOf, currentPage, setPage, ON_HAND, isOnHand, drawPhoto,
   };
 })();

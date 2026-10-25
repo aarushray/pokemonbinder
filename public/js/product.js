@@ -28,6 +28,26 @@
 
   const canvas = document.getElementById('canvas');
   const colorName = document.getElementById('colorName');
+
+  // Designs on hand: a photo of the real binder, sold as it is in its one colour and material.
+  if (Shop.isOnHand(design)) {
+    const finish = (Binder.finishes(type.id) || []).find((f) => f.id === Binder.finishOf(type.id, design.color));
+    colorName.textContent = Binder.colorName(design.color);
+    document.getElementById('swatches').hidden = true;
+    const fixed = document.getElementById('finishFixed');
+    fixed.hidden = false;
+    fixed.querySelector('.fixed-value').textContent = finish ? finish.name : 'PU Leather';
+    Shop.renderPrice(document.getElementById('price'), Shop.sale(design, design.price + Binder.finishExtra(type.id, finish && finish.id)));
+    document.getElementById('cards').textContent = `Holds ${finish?.cards ?? design.cards ?? 540} pockets`;
+    document.getElementById('madeToOrder').textContent = 'In stock: this is the binder you will receive';
+    canvas.setAttribute('aria-label', `Photo of the ${design.name} binder`);
+    document.querySelector('.qty').hidden = true; // one of a kind
+    buyButtons(() => design.color, 1);
+    const photo = await Shop.loadImage(design.art).catch(() => null);
+    if (photo) Shop.drawPhoto(canvas, photo);
+    return;
+  }
+
   // The home page passes the colour picked on the card, if any.
   const requested = new URLSearchParams(location.search).get('color');
   const unavailable = Shop.unavailableFor(type.id);
@@ -112,18 +132,24 @@
   art = await Shop.loadImage(design.art);
   draw();
 
-  let qty = 1;
-  const qtyEl = document.getElementById('qty');
-  const setQty = (n) => {
-    qty = Math.max(1, Math.min(20, n));
-    qtyEl.textContent = qty;
-  };
-  document.getElementById('minus').addEventListener('click', () => setQty(qty - 1));
-  document.getElementById('plus').addEventListener('click', () => setQty(qty + 1));
+  buyButtons(() => color);
 
-  const added = document.getElementById('added');
-  document.getElementById('addBtn').addEventListener('click', () => {
-    Shop.addToCart(design.id, color, qty);
-    added.hidden = false;
-  });
+  // Quantity buttons and "Add to cart", adding the binder in the colour getColor() returns, at
+  // most `max` in the cart.
+  function buyButtons(getColor, max = 20) {
+    let qty = 1;
+    const qtyEl = document.getElementById('qty');
+    const setQty = (n) => {
+      qty = Math.max(1, Math.min(max, n));
+      qtyEl.textContent = qty;
+    };
+    document.getElementById('minus').addEventListener('click', () => setQty(qty - 1));
+    document.getElementById('plus').addEventListener('click', () => setQty(qty + 1));
+
+    const added = document.getElementById('added');
+    document.getElementById('addBtn').addEventListener('click', () => {
+      Shop.addToCart(design.id, getColor(), qty, max);
+      added.hidden = false;
+    });
+  }
 })();
