@@ -30,7 +30,7 @@
     <section class="panel pages-panel">
       <div class="group">
         <h2>Pages</h2>
-        <p class="note">Each page of the shop has its own subclasses, shown to customers as filters. Removing a page or subclass never deletes designs. Subclasses are listed with names containing "Series" first, then names starting with a number, then the rest A–Z.</p>
+        <p class="note">Each page of the shop has its own subclasses, shown to customers as filters. Removing a page or subclass never deletes designs. Subclasses are listed with names containing "Series" first, then names starting with a number, then the rest A–Z. Add a subclass called "Designs on hand" to a page for binders you already have in stock: designs ticked with it show your photo instead of a rendered binder.</p>
         <div id="pages" class="page-list"></div>
         <form id="addPageForm" class="add-page">
           <input id="newPage" maxlength="40" placeholder="New page name, e.g. Dragon Ball" aria-label="New page name" />
@@ -105,7 +105,7 @@
         <label id="dropzone" class="dropzone" for="fileInput">
           <input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden />
           <span class="dz-main">Drop design images here or <u>browse</u></span>
-          <span class="dz-hint">You can add several at once. PNG, JPG or WebP in the binder type's aspect ratio.</span>
+          <span class="dz-hint">You can add several at once. PNG, JPG or WebP in the binder type's aspect ratio. For a binder you already have, upload a photo of it and tick the "Designs on hand" subclass: the shop shows the photo as it is, in that binder's colour only.</span>
         </label>
       </div>
 

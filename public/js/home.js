@@ -65,6 +65,14 @@
     body.append(left, price);
     link.append(media, body);
 
+    // Designs on hand are a photo of the real binder, so they only come in that one colour.
+    if (Shop.isOnHand(d)) {
+      sub.textContent = `${subText(d.color)} · In stock`;
+      card.append(link);
+      cards.push({ el: card, design: d, subs: new Set((d.subclasses || []).map(Shop.normTag)) });
+      continue;
+    }
+
     // Other colours are rendered on demand from the full artwork (loaded on first use).
     let art = null;
     let current = d.color;

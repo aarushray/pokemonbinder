@@ -69,7 +69,9 @@
       if (href) thumb.href = href;
       const canvas = document.createElement('canvas');
       thumb.appendChild(canvas);
-      art(item).then((img) => Binder.render(canvas, { image: img, color: item.color, type: type.id, scale: 0.15 }));
+      const onHand = !Shop.isCustom(item) && Shop.isOnHand(byId.get(item.id));
+      art(item).then((img) => (onHand && img ? Shop.drawPhoto(canvas, img, 300)
+        : Binder.render(canvas, { image: img, color: item.color, type: type.id, scale: 0.15 })));
 
       const info = document.createElement('div');
       const name = document.createElement(href ? 'a' : 'span');

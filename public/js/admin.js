@@ -34,8 +34,9 @@
 
   // "Page" dropdown plus a checkbox per subclass of the chosen page. `state` is { page, subclasses }
   // (subclasses: array of names) and is updated in place. Re-renders when pages or subclasses change.
+  // onChange() is called after the admin picks another page or ticks a subclass.
   const pickers = new Set();
-  function pageField(state) {
+  function pageField(state, onChange = () => {}) {
     const wrap = document.createElement('div');
     wrap.className = 'page-picker';
 
@@ -55,6 +56,7 @@
         state.page = select.value;
         state.subclasses = [];
         render();
+        onChange();
       });
 
       const subs = document.createElement('div');
@@ -69,6 +71,7 @@
           box.addEventListener('change', () => {
             state.subclasses = state.subclasses.filter((x) => Shop.normTag(x) !== Shop.normTag(s));
             if (box.checked) state.subclasses.push(s);
+            onChange();
           });
           label.append(box, document.createTextNode(s));
           subs.appendChild(label);
@@ -373,7 +376,8 @@
     el.className = 'queue-item';
 
     const canvas = document.createElement('canvas');
-    const draw = () => Binder.render(canvas, { image: item.img, color: item.color, type: item.type, scale: 0.25 });
+    const draw = () => (Shop.isOnHand(item) ? Shop.drawPhoto(canvas, item.img, 500)
+      : Binder.render(canvas, { image: item.img, color: item.color, type: item.type, scale: 0.25 }));
 
     const warn = document.createElement('div');
     warn.className = 'file-info warn';
@@ -381,7 +385,8 @@
       const [w, h] = Binder.getType(item.type).ratio;
       const ratio = item.img.naturalWidth / item.img.naturalHeight;
       warn.textContent = `${item.img.naturalWidth} × ${item.img.naturalHeight} is not ${w}:${h}, so it will be cropped.`;
-      warn.hidden = Math.abs(ratio / (w / h) - 1) < 0.02;
+      // Photos of binders on hand are shown uncropped.
+      warn.hidden = Shop.isOnHand(item) || Math.abs(ratio / (w / h) - 1) < 0.02;
     };
 
     const typeField = document.createElement('label');
@@ -402,7 +407,7 @@
     name.addEventListener('input', () => { item.name = name.value; });
     nameField.appendChild(name);
 
-    const pagePicker = pageField(item);
+    const pagePicker = pageField(item, () => { checkRatio(); draw(); });
 
     const colorField = document.createElement('label');
     colorField.className = 'field';
@@ -509,7 +514,8 @@
         const item = queue[0];
         setStatus(`Publishing ${done + 1} of ${total}…`);
         const thumbCanvas = document.createElement('canvas');
-        Binder.render(thumbCanvas, { image: item.img, color: item.color, type: item.type, scale: 0.5 });
+        if (Shop.isOnHand(item)) Shop.drawPhoto(thumbCanvas, item.img, 800);
+        else Binder.render(thumbCanvas, { image: item.img, color: item.color, type: item.type, scale: 0.5 });
         const res = await AdminAuth.fetch('/api/designs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -641,7 +647,9 @@
       const canvas = document.createElement('canvas');
       let art = null;
       const draw = () => {
-        if (art) Binder.render(canvas, { image: art, color: draft.color, type: draft.type, scale: 0.25 });
+        if (!art) return;
+        if (Shop.isOnHand(draft)) Shop.drawPhoto(canvas, art, 500);
+        else Binder.render(canvas, { image: art, color: draft.color, type: draft.type, scale: 0.25 });
       };
       Shop.loadImage(d.art).then((img) => { art = img; draw(); }).catch(() => {});
 
@@ -704,10 +712,13 @@
         error.hidden = true;
         save.disabled = true;
         const body = { name: draft.name.trim(), page: draft.page, subclasses: draft.subclasses, type: draft.type, color: draft.color, cards: Number(draft.cards), price: Number(draft.price), discount: draft.discount === '' ? 0 : Number(draft.discount) };
-        // The shop thumbnail shows the type and colour, so redraw it when either changed.
-        if ((draft.type !== Shop.designType(d).id || draft.color !== d.color) && art) {
+        // The shop thumbnail shows the type and colour (or the photo, for designs on hand), so
+        // redraw it when any of those changed.
+        const onHand = Shop.isOnHand(draft);
+        if ((draft.type !== Shop.designType(d).id || draft.color !== d.color || onHand !== Shop.isOnHand(d)) && art) {
           const thumb = document.createElement('canvas');
-          Binder.render(thumb, { image: art, color: draft.color, type: draft.type, scale: 0.5 });
+          if (onHand) Shop.drawPhoto(thumb, art, 800);
+          else Binder.render(thumb, { image: art, color: draft.color, type: draft.type, scale: 0.5 });
           body.thumb = thumb.toDataURL('image/webp', 0.85);
         }
         const res = await AdminAuth.fetch(`/api/designs/${encodeURIComponent(d.id)}`, {
@@ -730,7 +741,7 @@
       actions.className = 'row';
       actions.append(save, linkButton('Cancel', showView));
 
-      el.replaceChildren(canvas, field('Name', name), pageField(draft),
+      el.replaceChildren(canvas, field('Name', name), pageField(draft, draw),
         field('Binder type', typeSelect),
         field('Binder colour', colorSelect), sizeRow, field('Discount % (optional)', discount), error, actions);
     }
