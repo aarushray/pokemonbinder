@@ -119,7 +119,8 @@ const Shop = (() => {
   }
 
   // Designs and the shop's pages ({ designs, collections }), fetched once per page load.
-  // Pass fresh = true after changing them (admin page).
+  // Pass fresh = true after changing them (admin page). `designs` leaves out designs on hand that
+  // have been sold; `allDesigns` (for the admin page) keeps them.
   let catalogPromise = null;
   let storeDiscount = 0; // percent, from the admin page (set when the catalogue loads)
   let stock = {}; // { typeId: [colour ids out of stock] }, from the admin page
@@ -135,15 +136,17 @@ const Shop = (() => {
         const bannerText = (db.settings && db.settings.bannerText) || '';
         stock = (db.settings && db.settings.unavailable) || {};
         const featured = (db.settings && Array.isArray(db.settings.featured)) ? db.settings.featured : [];
-        return { designs: db.designs || [], collections: db.collections || [], settings: { storeDiscount, bannerText, unavailable: stock, featured } };
+        const allDesigns = db.designs || [];
+        return { designs: allDesigns.filter((d) => !d.soldOrderId), allDesigns, collections: db.collections || [], settings: { storeDiscount, bannerText, unavailable: stock, featured } };
       });
       catalogPromise.catch(() => { catalogPromise = null; });
     }
     return catalogPromise;
   }
 
-  async function loadDesigns(fresh = false) {
-    return (await loadCatalog(fresh)).designs;
+  async function loadDesigns(fresh = false, includeSold = false) {
+    const catalog = await loadCatalog(fresh);
+    return includeSold ? catalog.allDesigns : catalog.designs;
   }
 
   function loadImage(src) {

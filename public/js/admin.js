@@ -107,7 +107,7 @@
   async function loadPages() {
     try {
       let settings;
-      ({ designs: allDesigns, collections, settings } = await Shop.loadCatalog(true));
+      ({ allDesigns, collections, settings } = await Shop.loadCatalog(true));
       featured = settings.featured.filter((id) => allDesigns.some((d) => d.id === id));
     } catch {
       return;
@@ -563,18 +563,31 @@
     loadPublished();
   }
 
+  async function relist(d) {
+    if (!confirm(`Put "${d.name}" back on sale? It will show in the shop again.`)) return;
+    try {
+      await adminFetch(`/api/designs/${encodeURIComponent(d.id)}/relist`, { method: 'POST' });
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
+    await loadPages();
+    loadPublished();
+  }
+
   async function loadPublished() {
     const list = document.getElementById('published');
     const empty = document.getElementById('empty');
     let designs = [];
     try {
-      designs = await Shop.loadDesigns();
+      designs = await Shop.loadDesigns(false, true);
     } catch {
       empty.hidden = false;
       empty.textContent = 'Could not load designs. Start the site with "npm start" and open http://localhost:3000/admin.html.';
       return;
     }
-    document.getElementById('count').textContent = `${designs.length} live`;
+    const sold = designs.filter((d) => d.soldOrderId).length;
+    document.getElementById('count').textContent = `${designs.length - sold} live` + (sold ? ` · ${sold} sold` : '');
     empty.hidden = designs.length > 0;
     list.replaceChildren(...designs.map(publishedItem));
   }
@@ -633,6 +646,15 @@
       const actions = document.createElement('div');
       actions.className = 'row';
       actions.append(linkButton('Edit', showEdit), feature, linkButton('Delete', () => deleteDesign(d)));
+      // A design on hand that someone ordered is hidden from the shop until it's put back on sale
+      // (cancelling the order on the Orders page does that too).
+      if (d.soldOrderId) {
+        const badge = document.createElement('span');
+        badge.className = 'tag tag-sold';
+        badge.textContent = `Sold · order #${d.soldOrderId.slice(0, 8).toUpperCase()} · hidden from the shop`;
+        tagList.prepend(badge);
+        actions.append(linkButton('Put back on sale', () => relist(d)));
+      }
       if (isFeatured) {
         const badge = document.createElement('span');
         badge.className = 'tag tag-featured';

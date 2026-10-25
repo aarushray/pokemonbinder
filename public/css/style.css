@@ -471,6 +471,7 @@ a { color: inherit; }
 .tag-remove { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 4px; }
 .tag-remove:hover { color: var(--text); }
 .tag-featured { font-weight: 600; }
+.tag-sold { background: #fde8e8; color: #9b1c1c; font-weight: 600; }
 .bulk-price-form { align-items: center; margin-top: 0; }
 .bulk-price-form select, .bulk-price-form input { font: inherit; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
 .add-page.bulk-price-form input { flex: 0 1 140px; min-width: 120px; }
