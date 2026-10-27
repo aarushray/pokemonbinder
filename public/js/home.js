@@ -56,7 +56,7 @@
     const type = Shop.designType(d);
     const sub = document.createElement('div');
     sub.className = 'card-sub';
-    const subText = (hex) => `${type.name} · ${Binder.colorName(hex)}`;
+    const subText = (hex) => `${type.name} · ${Binder.colorName(hex)}${Shop.isPreorder(type.id, hex) ? ' · Pre-order' : ''}`;
     sub.textContent = subText(d.color);
     left.append(title, sub);
     const price = document.createElement('div');
@@ -67,7 +67,7 @@
 
     // Designs on hand are a photo of the real binder, so they only come in that one colour.
     if (Shop.isOnHand(d)) {
-      sub.textContent = `${subText(d.color)} · In stock`;
+      sub.textContent = `${type.name} · ${Binder.colorName(d.color)} · In stock`;
       card.append(link);
       cards.push({ el: card, design: d, subs: new Set((d.subclasses || []).map(Shop.normTag)) });
       continue;

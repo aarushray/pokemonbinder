@@ -54,16 +54,29 @@
   // The home page passes the colour picked on the card, if any.
   const requested = new URLSearchParams(location.search).get('color');
   const unavailable = Shop.unavailableFor(type.id);
+  // Out-of-stock colours can still be picked (as a pre-order), but an in-stock one is chosen first.
   const firstOpen = (colors.find((c) => !unavailable.includes(c.id)) || colors[0]).id;
-  let color = colors.some((c) => c.id === requested) && !unavailable.includes(requested) ? requested
+  let color = colors.some((c) => c.id === requested) ? requested
     : !unavailable.includes(design.color) ? design.color : firstOpen;
   let art = null;
 
   const slides = Shop.coverSlides(canvas);
   slides.setBinder(type.id, color);
 
-  function draw() {
+  // Pre-order note under the swatches, and the lead time in the details, for out-of-stock colours.
+  const preorderEl = document.getElementById('preorder');
+  const leadTime = document.getElementById('leadTime');
+  const leadText = leadTime.textContent;
+  const showColor = () => {
     colorName.textContent = Binder.colorName(color);
+    const pre = unavailable.includes(color);
+    preorderEl.hidden = !pre;
+    preorderEl.textContent = Shop.PREORDER_NOTE;
+    leadTime.textContent = pre ? 'Pre-order: this colour is out of stock, so your binder will be completed in 3–4 weeks' : leadText;
+  };
+
+  function draw() {
+    showColor();
     slides.setBinder(type.id, color, { image: art });
     Binder.render(canvas, { image: art, color, type: type.id });
   }
@@ -90,12 +103,10 @@
   // Every other binder only comes in the diamond texture, shown as a fixed label.
   document.getElementById('finishFixed').hidden = !!finishes;
   if (finishes) {
-    // A material is greyed out when none of its colours are available for this design.
+    // A material whose colours are all out of stock is marked as pre-order only.
     finishSelect.replaceChildren(...finishes.map((f) => {
       const none = f.colors.every((c) => unavailable.includes(c));
-      const opt = new Option(none ? `${Binder.finishLabel(f)} (not available)` : Binder.finishLabel(f), f.id, false, f.id === finish);
-      opt.disabled = none;
-      return opt;
+      return new Option(none ? `${Binder.finishLabel(f)} (pre-order)` : Binder.finishLabel(f), f.id, false, f.id === finish);
     }));
     finishSelect.addEventListener('change', () => {
       finish = finishSelect.value;
@@ -104,7 +115,7 @@
       showSwatches();
       if (art) draw();
       else {
-        colorName.textContent = Binder.colorName(color);
+        showColor();
         slides.setBinder(type.id, color);
       }
     });
@@ -113,7 +124,7 @@
   function showSwatches() {
     const list = Binder.finishColors(type.id, finish);
     const open = list.filter((c) => !unavailable.includes(c.id));
-    if (!open.some((c) => c.id === color)) {
+    if (!list.some((c) => c.id === color)) {
       color = open.some((c) => c.id === design.color) ? design.color : (open[0] || list[0]).id;
     }
     Shop.swatches(swatchesEl, list, color, (id) => {
@@ -131,7 +142,7 @@
     canvas.height = thumb.naturalHeight;
     canvas.getContext('2d').drawImage(thumb, 0, 0);
   }
-  colorName.textContent = Binder.colorName(color);
+  showColor();
   art = await Shop.loadImage(design.art);
   draw();
 

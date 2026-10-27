@@ -83,6 +83,10 @@
         o.status = updated.status;
         saved.textContent = 'Saved';
         setTimeout(() => { saved.textContent = ''; }, 1500);
+        // Marking it paid takes its binders out of the stock counts (cancelling puts them back).
+        if (updated.stock && updated.stock.length) {
+          showStatus(`Order ${orderNumber(o.id)}: stock ${updated.stockReturned ? 'put back' : 'updated'}. ${updated.stock.join(', ')}.`);
+        }
       } catch (err) {
         status.value = o.status;
         showStatus(err.message);
@@ -113,6 +117,7 @@
       const li = document.createElement('li');
       const details = [l.binder_type, l.texture, l.color_name].filter(Boolean).join(', ');
       li.append(text('span', `${l.qty} × ${l.name} (${details})`));
+      if (l.preorder) li.append(text('span', 'Pre-order (3–4 weeks)', 'tag tag-preorder'));
       const price = l.discount_percent
         ? `${Shop.money(l.unit_price)} each (${l.discount_percent}% off ${Shop.money(l.original_price)})`
         : `${Shop.money(l.unit_price)} each`;

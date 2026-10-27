@@ -88,10 +88,17 @@
       meta.className = 'meta';
       const finish = (Binder.finishes(type.id) || []).find((f) => f.id === Binder.finishOf(type.id, item.color));
       meta.textContent = `${type.name}${finish && Shop.isCustom(item) ? ` · ${finish.name}` : ''} · ${Binder.colorName(item.color)} · `;
+
       const unitEl = document.createElement('span');
       Shop.renderPrice(unitEl, unit);
       meta.appendChild(unitEl);
       info.append(name, meta);
+      if (!onHand && Shop.isPreorder(type.id, item.color)) {
+        const pre = document.createElement('div');
+        pre.className = 'preorder-note';
+        pre.textContent = Shop.PREORDER_NOTE;
+        info.append(pre);
+      }
 
       const right = document.createElement('div');
       right.className = 'line-right';

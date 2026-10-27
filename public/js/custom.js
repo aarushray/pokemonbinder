@@ -49,13 +49,11 @@ function setType(id) {
   document.querySelector('#finishFixed .fixed-value').textContent = `PU Leather — ${Binder.capacity(id)} pockets`;
   state.finish = list ? Binder.finishOf(id, state.color) : null;
   if (list) {
-    // A material is greyed out when every one of its colours is out of stock for this binder.
+    // A material whose colours are all out of stock for this binder is pre-order only.
     const off = Shop.unavailableFor(id);
     finishSelect.replaceChildren(...list.map((f) => {
       const none = f.colors.every((c) => off.includes(c));
-      const opt = new Option(Binder.finishLabel(f, Binder.capacity(id, f.id)) + (none ? ' (out of stock)' : ''), f.id, false, f.id === state.finish);
-      opt.disabled = none;
-      return opt;
+      return new Option(Binder.finishLabel(f, Binder.capacity(id, f.id)) + (none ? ' (pre-order)' : ''), f.id, false, f.id === state.finish);
     }));
   }
   showPrices();
@@ -64,12 +62,12 @@ function setType(id) {
 }
 
 // Swatches for the current binder type and texture. Keeps the chosen colour if it's still
-// offered, otherwise picks the first one.
+// offered (out-of-stock colours are pre-orders), otherwise picks the first one in stock.
 function showColors() {
   const colors = Binder.finishColors(state.type, state.finish);
   const off = Shop.unavailableFor(state.type);
   const open = colors.filter((c) => !off.includes(c.id));
-  const color = open.some((c) => c.id === state.color) ? state.color : (open[0] || colors[0]).id;
+  const color = colors.some((c) => c.id === state.color) ? state.color : (open[0] || colors[0]).id;
   const swatchesEl = document.getElementById('swatches');
   Shop.swatches(swatchesEl, colors, color, (id) => {
     wheel.style.removeProperty('--pick');
@@ -222,9 +220,12 @@ function showBuy() {
   const finish = (Binder.finishes(t.id) || []).find((f) => f.id === Binder.finishOf(t.id, state.color));
   document.getElementById('buySummary').textContent =
     `${t.name} · ${finish ? finish.name : 'PU Leather'} · ${Binder.colorName(state.color)}`;
+  const preorderEl = document.getElementById('preorder');
+  preorderEl.hidden = !Shop.isPreorder(t.id, state.color);
+  preorderEl.textContent = Shop.PREORDER_NOTE;
   document.getElementById('buyPrice').textContent = Shop.money(Shop.customPrice({ type: t.id, color: state.color }) * qty);
   // A colour from the admin colour wheel is a preview only, not something customers can order.
-  const preview = !Binder.COLORS.some((c) => c.id === state.color) || Shop.unavailableFor(state.type).includes(state.color);
+  const preview = !Binder.COLORS.some((c) => c.id === state.color);
   addBtn.disabled = !state.file || preview;
   const prompt = 'Upload your design (step 3) to add it to your cart.';
   const previewNote = 'Colour-wheel colours are a preview for admins only and can\'t be added to the cart. Pick a listed colour to order.';

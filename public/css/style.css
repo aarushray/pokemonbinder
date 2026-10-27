@@ -287,9 +287,10 @@ a { color: inherit; }
     radial-gradient(circle at 75% 25%, rgba(0, 0, 0, 0.12), transparent 35%),
     var(--c);
 }
-/* Colours not available yet: greyed out with a diagonal line through them. */
+/* Out-of-stock colours (pre-order only): greyed out with a diagonal line through them. */
 .swatch { position: relative; }
-.swatch-off { opacity: 0.35; filter: grayscale(0.6); cursor: not-allowed; }
+.swatch-off { opacity: 0.35; filter: grayscale(0.6); }
+.swatch-off[aria-checked="true"] { opacity: 0.7; }
 .swatch-off::after {
   content: "";
   position: absolute;
@@ -727,3 +728,11 @@ input.own-discount:disabled { background: var(--surface); color: var(--muted); c
 }
 .back-photo img { display: block; max-width: 120px; max-height: 160px; border-radius: 6px; margin-bottom: 6px; }
 .back-photo input[type="file"] { font-size: 0.85rem; max-width: 100%; }
+/* Out-of-stock colour chosen: made to order as a pre-order, which takes longer. */
+.preorder-note { margin: 10px 0 0; font-size: 0.9rem; font-weight: 600; color: #9a5b00; }
+.cart-line .preorder-note { margin-top: 4px; font-size: 0.85rem; }
+.tag-preorder { background: #fff1dc; color: #9a5b00; font-weight: 600; }
+@media (prefers-color-scheme: dark) {
+  .preorder-note { color: #f0b35a; }
+  .tag-preorder { background: #3a2a10; color: #f0b35a; }
+}

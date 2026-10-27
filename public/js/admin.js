@@ -839,7 +839,7 @@
 
   // ---- Colour availability: for each binder size, cross out the colours not in stock ----
   // Saved straight away; customers see those colours crossed out on every design of that size and on
-  // Custom Designs, and can't order them.
+  // Custom Designs, and can only pre-order them.
   const stockEl = document.getElementById('stock');
   const stockStatus = document.getElementById('stockStatus');
   let stock = {};
