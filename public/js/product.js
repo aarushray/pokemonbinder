@@ -40,6 +40,7 @@
     Shop.renderPrice(document.getElementById('price'), Shop.sale(design, design.price + Binder.finishExtra(type.id, finish && finish.id)));
     document.getElementById('cards').textContent = `Holds ${finish?.cards ?? design.cards ?? 540} pockets`;
     document.getElementById('madeToOrder').textContent = 'In stock: this is the binder you will receive';
+    document.getElementById('leadTime').hidden = true; // already made, no waiting
     canvas.setAttribute('aria-label', `Photo of the ${design.name} binder`);
     document.querySelector('.qty').hidden = true; // one of a kind
     buyButtons(() => design.color, 1);
