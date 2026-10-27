@@ -550,6 +550,7 @@
         const item = queue[0];
         setStatus(`Publishing ${done + 1} of ${total}…`);
         const thumbCanvas = document.createElement('canvas');
+        await Binder.feltReady; // so velvet thumbnails use the velvet photo
         if (Shop.isOnHand(item)) Shop.drawPhoto(thumbCanvas, item.img, 800);
         else Binder.render(thumbCanvas, { image: item.img, color: item.color, type: item.type, scale: 0.5 });
         const res = await AdminAuth.fetch('/api/designs', {
@@ -781,7 +782,10 @@
         // The shop thumbnail shows the type and colour (or the photo, for designs on hand), so
         // redraw it when any of those changed.
         const onHand = Shop.isOnHand(draft);
-        if ((draft.type !== Shop.designType(d).id || draft.color !== d.color || onHand !== Shop.isOnHand(d)) && art) {
+        // Velvet thumbnails are always redrawn, so older ones pick up the current velvet texture.
+        const velvet = Binder.finishOf(draft.type, draft.color) === 'velvet';
+        if ((draft.type !== Shop.designType(d).id || draft.color !== d.color || onHand !== Shop.isOnHand(d) || (velvet && !onHand)) && art) {
+          await Binder.feltReady;
           const thumb = document.createElement('canvas');
           if (onHand) Shop.drawPhoto(thumb, art, 800);
           else Binder.render(thumb, { image: art, color: draft.color, type: draft.type, scale: 0.5 });
