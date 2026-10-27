@@ -668,6 +668,28 @@ async function updateOrderStatus(id, req, res) {
   sendJson(res, 200, { ...rows[0], stock, stockReturned: wasPaid && !nowPaid });
 }
 
+// DELETE /api/orders/<id> (admin): permanently removes a cancelled order, with its customers'
+// uploaded artwork and payment screenshot. Orders that aren't cancelled can't be deleted.
+async function deleteOrder(id, res) {
+  const [order] = await supa(`/rest/v1/orders?select=status,items,payment_proof_path&id=eq.${id}`);
+  if (!order) return sendJson(res, 404, { error: 'Order not found' });
+  if (order.status !== 'cancelled') return sendJson(res, 409, { error: 'Only cancelled orders can be deleted. Set it to Cancelled first.' });
+  const files = [
+    ['custom-art', (order.items || []).map((l) => l.art_path).filter(Boolean)],
+    ['payment-proofs', [order.payment_proof_path].filter(Boolean)],
+  ];
+  for (const [bucket, prefixes] of files) {
+    if (!prefixes.length) continue;
+    try {
+      await supa(`/storage/v1/object/${bucket}`, { method: 'DELETE', body: JSON.stringify({ prefixes }) });
+    } catch {
+      // The order is still deleted; a leftover file only takes up storage.
+    }
+  }
+  await supa(`/rest/v1/orders?id=eq.${id}`, { method: 'DELETE' });
+  sendJson(res, 200, { ok: true });
+}
+
 // A short-lived download link for one custom design's artwork, saved under a readable name.
 async function artDownload(id, index, res) {
   const [order] = await supa(`/rest/v1/orders?select=*&id=eq.${id}`);
@@ -962,6 +984,7 @@ http.createServer(async (req, res) => {
     const uuid = '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})';
     const orderMatch = new RegExp(`^/api/orders/${uuid}$`).exec(pathname);
     if (orderMatch && req.method === 'PATCH') return await updateOrderStatus(orderMatch[1], req, res);
+    if (orderMatch && req.method === 'DELETE') return await deleteOrder(orderMatch[1], res);
     const artMatch = new RegExp(`^/api/orders/${uuid}/art/(\\d{1,3})$`).exec(pathname);
     if (artMatch && req.method === 'GET') return await artDownload(artMatch[1], Number(artMatch[2]), res);
     const proofMatch = new RegExp(`^/api/orders/${uuid}/proof$`).exec(pathname);

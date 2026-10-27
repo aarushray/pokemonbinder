@@ -76,11 +76,29 @@
     status.setAttribute('aria-label', `Status of order ${orderNumber(o.id)}`);
     for (const [id, label] of Object.entries(STATUS)) status.add(new Option(label, id, false, id === o.status));
     const saved = text('span', '', 'muted');
+    // Cancelled orders can be deleted for good.
+    const del = text('button', 'Delete', 'btn btn-outline btn-sm order-delete');
+    del.type = 'button';
+    del.hidden = o.status !== 'cancelled';
+    del.addEventListener('click', async () => {
+      if (!confirm(`Delete order ${orderNumber(o.id)} from ${o.customer_name || 'this customer'} for good? Its artwork and payment proof are deleted too. This can't be undone.`)) return;
+      del.disabled = true;
+      try {
+        await adminFetch(`/api/orders/${o.id}`, { method: 'DELETE' });
+        orders = orders.filter((x) => x !== o);
+        render();
+        showStatus(`Deleted order ${orderNumber(o.id)}.`);
+      } catch (err) {
+        del.disabled = false;
+        showStatus(err.message);
+      }
+    });
     status.addEventListener('change', async () => {
       status.disabled = true;
       try {
         const updated = await adminFetch(`/api/orders/${o.id}`, { method: 'PATCH', body: JSON.stringify({ status: status.value }) });
         o.status = updated.status;
+        del.hidden = o.status !== 'cancelled';
         saved.textContent = 'Saved';
         setTimeout(() => { saved.textContent = ''; }, 1500);
         // Marking it paid takes its binders out of the stock counts (cancelling puts them back).
@@ -93,7 +111,7 @@
       }
       status.disabled = false;
     });
-    head.append(text('strong', orderNumber(o.id)), text('span', when, 'muted'), saved, status);
+    head.append(text('strong', orderNumber(o.id)), text('span', when, 'muted'), saved, status, del);
 
     // Customer and delivery details.
     const who = document.createElement('div');
