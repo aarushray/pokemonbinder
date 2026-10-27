@@ -6,6 +6,7 @@
 // Data lives in designs/designs.json: { designs: [...], collections: [{ id, name, subclasses }],
 // settings: { storeDiscount, bannerText, unavailable, featured } }. Discounts are whole percentages (0 = none).
 // settings.unavailable lists, per binder type, the colours not in stock: { '9-pocket': ['#395143'] }.
+// Customers can still order those colours, as pre-orders (order lines get preorder: true).
 // settings.featured lists design ids, in order, that the shop shows first on their page.
 // A design on hand (one of a kind) gets soldOrderId once someone orders it, which hides it from the
 // shop; cancelling that order (or "Put back on sale" on the admin page) clears it. It may also have
@@ -339,17 +340,62 @@ async function updateInventory(req, res) {
   if (count === null) delete counts[body.color];
   else counts[body.color] = count;
   inventory[type.id] = counts;
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(INVENTORY_FILE + '.tmp', JSON.stringify(inventory, null, 2));
-  fs.renameSync(INVENTORY_FILE + '.tmp', INVENTORY_FILE);
+  writeInventory(inventory);
   const db = readDb();
   if (count !== null) {
-    const off = (db.settings.unavailable[type.id] || []).filter((c) => c !== body.color);
-    if (count === 0) off.push(body.color);
-    db.settings.unavailable = cleanStock({ ...db.settings.unavailable, [type.id]: off });
+    crossOut(db, type.id, body.color, count === 0);
     writeDb(db);
   }
   sendJson(res, 200, { inventory: readInventory(), unavailable: db.settings.unavailable });
+}
+
+function writeInventory(inventory) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(INVENTORY_FILE + '.tmp', JSON.stringify(inventory, null, 2));
+  fs.renameSync(INVENTORY_FILE + '.tmp', INVENTORY_FILE);
+}
+
+// Crosses a colour out in Colour availability (off = true), or makes it available again.
+function crossOut(db, typeId, color, off) {
+  const list = (db.settings.unavailable[typeId] || []).filter((c) => c !== color);
+  if (off) list.push(color);
+  db.settings.unavailable = cleanStock({ ...db.settings.unavailable, [typeId]: list });
+}
+
+// Statuses after the admin has confirmed payment. Moving an order into one of these takes its
+// binders out of the stock counts; moving it back out (e.g. to cancelled) puts them back.
+const PAID_STATUSES = ['paid', 'in_production', 'shipped', 'completed'];
+
+// Changes the stock counts by the binders in an order's lines (sign -1 takes them, +1 returns
+// them). Only colours with a count are changed. Designs on hand don't use a blank binder, and
+// pre-orders were for colours with none in stock, so neither changes the counts. A count that
+// reaches 0 crosses the colour out; above 0 makes it available again. Returns notes such as
+// "9-slots Yellow: 4 left" for the admin.
+function adjustStock(lines, sign) {
+  const inventory = readInventory();
+  const db = readDb();
+  const used = new Map(); // "typeId|colour" -> binders
+  for (const l of lines || []) {
+    const type = BINDER_TYPES.find((t) => t.name === l.binder_type);
+    const design = l.design_id && db.designs.find((d) => d.id === l.design_id);
+    if (!type || l.preorder || (design && isOnHand(design))) continue;
+    if (!Number.isInteger((inventory[type.id] || {})[l.color])) continue; // not tracked
+    const key = `${type.id}|${l.color}`;
+    used.set(key, (used.get(key) || 0) + (Number(l.qty) || 0));
+  }
+  const notes = [];
+  for (const [key, qty] of used) {
+    const [typeId, color] = key.split('|');
+    const counts = inventory[typeId];
+    counts[color] = Math.min(99999, Math.max(0, counts[color] + sign * qty));
+    crossOut(db, typeId, color, counts[color] === 0);
+    notes.push(`${BINDER_TYPES.find((t) => t.id === typeId).name} ${colorName(color)}: ${counts[color]} left`);
+  }
+  if (notes.length) {
+    writeInventory(inventory);
+    writeDb(db);
+  }
+  return notes;
 }
 
 // Subclass for binders already engraved and in stock; their image is a photo of the real binder.
@@ -607,6 +653,8 @@ async function listOrders(res) {
 async function updateOrderStatus(id, req, res) {
   const { status } = JSON.parse(await readBody(req, 4096));
   if (!ORDER_STATUSES.includes(status)) return sendJson(res, 400, { error: 'Unknown status' });
+  const [before] = await supa(`/rest/v1/orders?select=status&id=eq.${id}`);
+  if (!before) return sendJson(res, 404, { error: 'Order not found' });
   const rows = await supa(`/rest/v1/orders?id=eq.${id}`, {
     method: 'PATCH',
     headers: { Prefer: 'return=representation' },
@@ -614,7 +662,10 @@ async function updateOrderStatus(id, req, res) {
   });
   if (!rows.length) return sendJson(res, 404, { error: 'Order not found' });
   if (status === 'cancelled') releaseOnHand(id); // its designs on hand go back on sale
-  sendJson(res, 200, rows[0]);
+  const wasPaid = PAID_STATUSES.includes(before.status);
+  const nowPaid = PAID_STATUSES.includes(status);
+  const stock = wasPaid === nowPaid ? [] : adjustStock(rows[0].items, nowPaid ? -1 : 1);
+  sendJson(res, 200, { ...rows[0], stock, stockReturned: wasPaid && !nowPaid });
 }
 
 // A short-lived download link for one custom design's artwork, saved under a readable name.
@@ -671,7 +722,6 @@ function priceLine(item, user, db) {
     const type = BINDER_TYPES.find((t) => t.id === item.type);
     if (!type) throw badRequest('A custom design in your cart uses a binder type we no longer sell. Please remove it.');
     if (!type.colors.includes(color)) throw badRequest('A custom design in your cart has an unknown colour.');
-    if (outOfStock(db, type, color)) throw badRequest(`${type.name} binders in ${colorName(color)} are out of stock. Please choose another colour for your custom design.`);
     const artPath = String(item.art_path || '');
     if (!artPath.startsWith(`${user.id}/`) || artPath.includes('..')) throw badRequest('The artwork for a custom design is missing. Please remove it and add it again.');
     const finish = finishOf(type, color);
@@ -680,6 +730,7 @@ function priceLine(item, user, db) {
       name: 'Custom design', binder_type: type.name, color, color_name: colorName(color),
       unit_price: price, original_price: price, discount_percent: 0, qty,
       custom: true, texture: finish ? finish.name : 'PU Leather', art_path: artPath,
+      ...(outOfStock(db, type, color) ? { preorder: true } : {}),
     };
   }
 
@@ -694,7 +745,6 @@ function priceLine(item, user, db) {
   if (onHand && design.soldOrderId) throw badRequest(`Sorry, "${design.name}" has just been sold. Please remove it from your cart.`);
   if (onHand && qty !== 1) throw badRequest(`"${design.name}" is one of a kind, so you can only order one.`);
   if (onHand && color !== design.color) throw badRequest(`"${design.name}" is a binder on hand and only comes in ${colorName(design.color)}. Please remove it and add it again.`);
-  if (!onHand && outOfStock(db, type, color)) throw badRequest(`${type.name} binders in ${colorName(color)} are out of stock. Please choose another colour.`);
   const finish = finishOf(type, color);
   const original = design.price + ((finish && finish.extraPrice) || 0);
   const discount = db.settings.storeDiscount > 0 ? db.settings.storeDiscount : design.discount || 0;
@@ -702,6 +752,8 @@ function priceLine(item, user, db) {
   return {
     design_id: design.id, name: design.name, binder_type: type.name, color, color_name: colorName(color),
     unit_price: price, original_price: original, discount_percent: discount, qty,
+    // A colour that's out of stock is made as a pre-order (designs on hand are already made).
+    ...(!onHand && outOfStock(db, type, color) ? { preorder: true } : {}),
   };
 }
 

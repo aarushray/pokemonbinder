@@ -124,8 +124,11 @@ const Shop = (() => {
   let catalogPromise = null;
   let storeDiscount = 0; // percent, from the admin page (set when the catalogue loads)
   let stock = {}; // { typeId: [colour ids out of stock] }, from the admin page
-  // Colours of a binder type that are out of stock (shown crossed out, can't be ordered).
+  // Colours of a binder type that are out of stock. They're shown crossed out but can still be
+  // ordered, as a pre-order that takes longer.
   const unavailableFor = (typeId) => stock[typeId] || [];
+  const isPreorder = (typeId, color) => unavailableFor(typeId).includes(color);
+  const PREORDER_NOTE = 'Pre-order: completion in 3–4 weeks';
 
   function loadCatalog(fresh = false) {
     if (fresh || !catalogPromise) {
@@ -219,7 +222,8 @@ const Shop = (() => {
   const thumbUrl = (d) => (d.updatedAt ? `${d.thumb}?v=${encodeURIComponent(d.updatedAt)}` : d.thumb);
 
   // Colour swatch radio buttons for `colors` (COLORS entries); calls onPick(id) when one is chosen.
-  // Colours in `unavailable` are shown greyed out and crossed out, and can't be chosen.
+  // Colours in `unavailable` are shown greyed out and crossed out; they can still be chosen (as a
+  // pre-order).
   function swatches(container, colors, selected, onPick, unavailable = []) {
     const off = new Set(unavailable);
     container.replaceChildren();
@@ -236,11 +240,8 @@ const Shop = (() => {
       b.setAttribute('aria-checked', String(c.id === selected));
       if (off.has(c.id)) {
         b.classList.add('swatch-off');
-        b.disabled = true;
-        b.title = `${c.name} (out of stock)`;
-        b.setAttribute('aria-label', `${c.name}, out of stock`);
-        container.appendChild(b);
-        continue;
+        b.title = `${c.name} (pre-order)`;
+        b.setAttribute('aria-label', `${c.name}, pre-order`);
       }
       b.addEventListener('click', () => {
         for (const el of container.children) el.setAttribute('aria-checked', String(el === b));
@@ -617,7 +618,7 @@ const Shop = (() => {
   pageSwitcher();
 
   return {
-    unavailableFor, defaultBanner, saleBanner, coverSlides, isCustom, customPrice, addCustomToCart, customArtIds, priceFor, discountFor, sale, renderPrice, readCart, addToCart, setQty, clearCart, stashCart, restoreCart, pruneCart, loadDesigns, loadImage, money, thumbUrl, swatches, designType,
+    unavailableFor, isPreorder, PREORDER_NOTE, defaultBanner, saleBanner, coverSlides, isCustom, customPrice, addCustomToCart, customArtIds, priceFor, discountFor, sale, renderPrice, readCart, addToCart, setQty, clearCart, stashCart, restoreCart, pruneCart, loadDesigns, loadImage, money, thumbUrl, swatches, designType,
     loadCatalog, normTag, sortSubclasses, pageOf, currentPage, setPage, ON_HAND, isOnHand, drawPhoto,
   };
 })();
