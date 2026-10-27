@@ -145,11 +145,56 @@
 
   // Surface textures (brightness multipliers), cached per size and kind:
   // diamond: raised diamond-plate pattern (the default for every binder colour except velvet ones).
-  // felt:  suede-like mottling modelled on a grey felt binder photo: soft, slightly horizontal
-  //        light/dark patches (about ±7% brightness) with thin lighter streaks and fine grain, no weave.
+  // felt:  velvet, from a photo of the real material (images/velvet-texture.jpg, with the photo's
+  //        lighting already evened out): its mottling and grain stretched over the cover. Until the
+  //        photo has loaded, a generated suede-like pattern stands in, and the canvases drawn with
+  //        it are redrawn once it's ready (Binder.feltReady resolves then).
   const textures = new Map();
+  let feltPhoto = null;
+  let feltLoading = true;
+  const waitingForFelt = new Map(); // canvas -> the options it was last drawn with
+  const feltReady = new Promise((resolve) => {
+    if (typeof Image === 'undefined') return resolve(false);
+    const img = new Image();
+    img.onload = () => {
+      feltPhoto = img;
+      feltLoading = false;
+      for (const key of [...textures.keys()]) if (key.endsWith(':felt')) textures.delete(key);
+      for (const [canvas, options] of waitingForFelt) if (canvas.binderOptions === options) render(canvas, options);
+      waitingForFelt.clear();
+      resolve(true);
+    };
+    img.onerror = () => {
+      feltLoading = false;
+      waitingForFelt.clear();
+      resolve(false);
+    };
+    img.src = 'images/velvet-texture.jpg';
+  });
+
+  // The velvet photo covering a w × h surface, as brightness multipliers averaging 1.
+  function photoTexture(w, h) {
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    const k = Math.max(w / feltPhoto.naturalWidth, h / feltPhoto.naturalHeight);
+    const dw = feltPhoto.naturalWidth * k;
+    const dh = feltPhoto.naturalHeight * k;
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(feltPhoto, (w - dw) / 2, (h - dh) / 2, dw, dh);
+    const px = g.getImageData(0, 0, w, h).data;
+    const t = new Float32Array(w * h);
+    let sum = 0;
+    for (let i = 0; i < t.length; i++) sum += t[i] = px[i * 4];
+    const mean = sum / t.length || 1;
+    for (let i = 0; i < t.length; i++) t[i] /= mean;
+    return t;
+  }
+
   function getTexture(w, h, scale, kind = 'diamond') {
     const key = `${w}x${h}:${kind}`;
+    if (kind === 'felt' && feltPhoto && !textures.has(key)) textures.set(key, photoTexture(w, h));
     if (kind === 'felt' && !textures.has(key)) {
       const s = (px) => Math.max(2, px * scale);
       // Layered clouds from coarse to fine, slightly stretched sideways, then domain-warped so the
@@ -373,6 +418,9 @@
   // the TCGEngrave logo engraved in the bottom corner beside the spine.
   // Returns where the binder sits in the canvas: { x0, y0, bw, bh, scale }.
   function render(canvas, options = {}) {
+    // Velvet drawn before its photo has loaded is redrawn when it arrives (unless redrawn since).
+    canvas.binderOptions = options;
+    if (feltLoading && resolveColor(options.color ?? COLORS[0].id).texture === 'felt') waitingForFelt.set(canvas, options);
     if (options.view === 'spine') return renderSpine(canvas, options);
     const back = options.view === 'back';
     const { color = COLORS[0].id, type = DEFAULT_TYPE, fit = 'cover', invert = false, scale: frameScale = 1, shadow = true } = options;
@@ -719,5 +767,5 @@
     return { x0, y0, bw, bh, scale };
   }
 
-  window.Binder = { COLORS, TYPES, DEFAULT_TYPE, getType, typeColors, finishes, finishColors, finishOf, finishExtra, finishLabel, capacity, logoReady, render, colorName, colorHex };
+  window.Binder = { COLORS, TYPES, DEFAULT_TYPE, getType, typeColors, finishes, finishColors, finishOf, finishExtra, finishLabel, capacity, logoReady, feltReady, render, colorName, colorHex };
 })();
