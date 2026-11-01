@@ -7,7 +7,8 @@
   const COLORS = [
     { id: '#e87a79', name: 'Pink', hex: '#e87a79' },
     // Purple keeps its original id (saved designs, carts and stock use it); only the shade changed.
-    { id: '#614875', name: 'Purple', hex: '#50007c', depth: 300 },
+    // The shade is matched to a photo of a real engraved purple binder.
+    { id: '#614875', name: 'Purple', hex: '#8361ad', depth: 300 },
     { id: '#445479', name: 'Navy Blue', hex: '#445479' },
     { id: '#fbcb46', name: 'Yellow', hex: '#fbcb46' },
     { id: '#395143', name: 'Green', hex: '#395143' },
