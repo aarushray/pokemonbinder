@@ -461,8 +461,11 @@ a { color: inherit; }
 .admin-item .btn { padding: 8px 20px; }
 .admin-item .status { margin: 0; }
 .status { font-size: 0.9rem; margin: 12px 0 0; }
-.pages-panel, .discount-panel, .bulk-price-panel, .featured-panel { margin-bottom: 24px; }
-.pages-panel .note, .discount-panel .note, .bulk-price-panel .note, .featured-panel .note { margin: 0 0 14px; }
+.pages-panel, .discount-panel, .bulk-price-panel, .featured-panel, .redraw-panel { margin-bottom: 24px; }
+.pages-panel .note, .discount-panel .note, .bulk-price-panel .note, .featured-panel .note, .redraw-panel .note { margin: 0 0 14px; }
+.redraw-form { align-items: center; margin-top: 0; }
+.redraw-form select { font: inherit; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+.redraw-panel .redraw-info { margin: 10px 0 0; }
 .page-list { display: flex; flex-direction: column; border-top: 1px solid var(--border); }
 .page-block { padding: 12px 0 14px; border-bottom: 1px solid var(--border); }
 .page-row { display: grid; grid-template-columns: 1fr auto auto; gap: 16px; align-items: center; }

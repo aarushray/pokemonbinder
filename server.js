@@ -474,6 +474,21 @@ async function updateDesign(id, req, res) {
   sendJson(res, 200, design);
 }
 
+// PUT /api/designs/<id>/thumb { thumb } (admin): replaces only the shop picture, e.g. after a
+// binder colour's shade changed. Nothing else about the design changes.
+async function updateThumb(id, req, res) {
+  const body = JSON.parse(await readBody(req));
+  const db = readDb();
+  const design = db.designs.find((d) => d.id === id);
+  if (!design) return sendJson(res, 404, { error: 'Design not found' });
+  const thumb = saveDataUrl(body.thumb, `${id}-thumb`);
+  if (thumb !== design.thumb) removeDesignFile(design.thumb);
+  design.thumb = thumb;
+  design.updatedAt = new Date().toISOString();
+  writeDb(db);
+  sendJson(res, 200, design);
+}
+
 async function createCollection(req, res) {
   const body = JSON.parse(await readBody(req));
   const name = String(body.name || '').replace(/\s+/g, ' ').trim().slice(0, 40);
@@ -1047,6 +1062,11 @@ http.createServer(async (req, res) => {
     if (one && req.method === 'PATCH') {
       if (!(await requireAdmin(req, res))) return;
       return await updateDesign(one[1], req, res);
+    }
+    const thumbMatch = /^\/api\/designs\/([a-z0-9-]+)\/thumb$/.exec(pathname);
+    if (thumbMatch && req.method === 'PUT') {
+      if (!(await requireAdmin(req, res))) return;
+      return await updateThumb(thumbMatch[1], req, res);
     }
     if (pathname.startsWith('/api/')) return sendJson(res, 404, { error: 'Not found' });
     if (req.method !== 'GET' && req.method !== 'HEAD') return res.writeHead(405).end();

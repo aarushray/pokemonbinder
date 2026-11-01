@@ -117,7 +117,59 @@
     for (const refresh of [...pickers]) refresh();
     renderBulkPrice();
     renderFeatured();
+    showRedrawInfo();
   }
+
+  // ---- Refresh shop pictures: redraw thumbnails with the colours' current shades ----
+  const redrawColor = document.getElementById('redrawColor');
+  const redrawBtn = document.getElementById('redrawBtn');
+  const redrawInfo = document.getElementById('redrawInfo');
+  const redrawStatus = document.getElementById('redrawStatus');
+  const setRedrawStatus = (msg, isError = false) => {
+    redrawStatus.hidden = !msg;
+    redrawStatus.textContent = msg;
+    redrawStatus.classList.toggle('error', isError);
+  };
+  redrawColor.replaceChildren(new Option('All colours', ''), ...Binder.COLORS.map((c) => new Option(c.name, c.id)));
+
+  // Published designs drawn onto a binder (not designs on hand) in the chosen colour.
+  const redrawTargets = () => allDesigns.filter((d) => !Shop.isOnHand(d) && (!redrawColor.value || d.color === redrawColor.value));
+  function showRedrawInfo() {
+    const n = redrawTargets().length;
+    redrawInfo.textContent = n ? `${n} ${n === 1 ? 'picture' : 'pictures'} will be redrawn.` : 'No designs in that colour.';
+  }
+  redrawColor.addEventListener('change', showRedrawInfo);
+
+  document.getElementById('redrawForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const list = redrawTargets();
+    if (!list.length) return setRedrawStatus('There are no designs in that colour.', true);
+    redrawBtn.disabled = true;
+    await Binder.feltReady; // so velvet pictures use the velvet texture
+    let done = 0;
+    const failed = [];
+    for (const d of list) {
+      setRedrawStatus(`Refreshing ${done + failed.length + 1} of ${list.length}…`);
+      try {
+        const art = await Shop.loadImage(d.art);
+        const canvas = document.createElement('canvas');
+        Binder.render(canvas, { image: art, color: d.color, type: Shop.designType(d).id, scale: 0.5 });
+        await adminFetch(`/api/designs/${encodeURIComponent(d.id)}/thumb`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ thumb: canvas.toDataURL('image/webp', 0.85) }),
+        });
+        done++;
+      } catch {
+        failed.push(d.name);
+      }
+    }
+    redrawBtn.disabled = false;
+    setRedrawStatus(`Refreshed ${done} ${done === 1 ? 'picture' : 'pictures'}.`
+      + (failed.length ? ` Couldn't refresh: ${failed.join(', ')}.` : ''), failed.length > 0);
+    await loadPages();
+    loadPublished();
+  });
 
   // One page in the Pages list: name, design count, Remove, and its subclasses (add/remove).
   function pageBlock(c) {

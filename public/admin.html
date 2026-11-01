@@ -68,6 +68,19 @@
       </div>
     </section>
 
+    <section class="panel redraw-panel">
+      <div class="group">
+        <h2>Refresh shop pictures</h2>
+        <p class="note">Redraws the shop pictures of published designs with each binder colour's current shade, e.g. after a colour was changed. Designs on hand keep their photos. Nothing else about the designs changes.</p>
+        <form id="redrawForm" class="add-page redraw-form">
+          <select id="redrawColor" aria-label="Binder colour"></select>
+          <button id="redrawBtn" class="btn" type="submit">Refresh pictures</button>
+        </form>
+        <p id="redrawInfo" class="note redraw-info"></p>
+        <p id="redrawStatus" class="status" hidden></p>
+      </div>
+    </section>
+
     <section class="panel discount-panel">
       <div class="group">
         <h2>Storewide discount</h2>
