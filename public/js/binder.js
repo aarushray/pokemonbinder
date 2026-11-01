@@ -86,10 +86,26 @@
     return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
   }
 
+  // Purple shades (hue 250-320°, not greyish), however dark: these always engrave dark.
+  function isPurple([r, g, b]) {
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    if (max === min || (max - min) / max < 0.25) return false;
+    const hue = max === r ? 60 * (((g - b) / (max - min)) % 6)
+      : max === g ? 60 * ((b - r) / (max - min) + 2)
+      : 60 * ((r - g) / (max - min) + 4);
+    const h = (hue + 360) % 360;
+    return h >= 250 && h <= 320;
+  }
+
+  // Whether the engraving comes out lighter than the binder (dark binders) rather than darker.
+  // Purple binders engrave dark (near black) even when the purple is deep.
+  const engravesLight = (base) => luminance(base) < 0.28 && !isPurple(base);
+
   // Colour the laser burns the material to. Calibrated against a pink sample photo:
   // base (230,169,176) engraves to roughly (154,69,74). Dark binders get lighter instead.
   function engraveColor(base) {
-    if (luminance(base) < 0.28) {
+    if (engravesLight(base)) {
       return base.map((v) => v + (255 - v) * 0.42);
     }
     return base.map((v) => v * Math.pow(v / 255, 1.5) * 0.8);
@@ -295,7 +311,7 @@
     const extra = Math.min(1, Math.max(0, (k - 2) / 8));
     let eng = engraveColor(base);
     if (extra > 0) {
-      const deep = luminance(base) < 0.28 ? base.map((v) => v + (255 - v) * 0.92) : base.map((v) => v * 0.12);
+      const deep = engravesLight(base) ? base.map((v) => v + (255 - v) * 0.92) : base.map((v) => v * 0.12);
       eng = eng.map((v, j) => v + (deep[j] - v) * extra);
     }
     return { gain, eng };
