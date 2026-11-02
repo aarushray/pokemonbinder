@@ -564,8 +564,8 @@ const Shop = (() => {
         sl.drawn = true;
       }
       if (!binder || !sl.view || sl.drawn) return;
-      // A duo's backs: turned over, the right-hand binder's back is on the left.
-      if (binder.color2) renderDuo(sl.canvas, { type: binder.type, color: binder.color2, color2: binder.color, view: sl.view });
+      // A duo's backs keep each binder on the same side as on the front view.
+      if (binder.color2) renderDuo(sl.canvas, { type: binder.type, color: binder.color, color2: binder.color2, view: sl.view });
       else Binder.render(sl.canvas, { ...binder.art, type: binder.type, color: binder.color, view: sl.view });
       sl.drawn = true;
     }
