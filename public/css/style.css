@@ -744,3 +744,8 @@ input.own-discount:disabled { background: var(--surface); color: var(--muted); c
 .admin-order-note label { font-size: 0.85rem; color: var(--muted); }
 .admin-order-note textarea { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); resize: vertical; }
 .admin-order-note .row { display: flex; align-items: center; gap: 12px; }
+/* Duo sets: two binders side by side, wider than a single binder. */
+.card-duo .card-media img { width: 94%; height: auto; }
+.duo-toggle { margin: 4px 0; }
+.duo-fields { display: flex; flex-direction: column; gap: 0; padding-left: 12px; border-left: 2px solid var(--border); }
+.duo-label { margin-top: 16px; }

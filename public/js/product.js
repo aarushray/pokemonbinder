@@ -51,6 +51,74 @@
     return;
   }
 
+  // Duo: two binders side by side, sold as a pair, each in the colour the customer picks.
+  if (Shop.isDuo(design)) {
+    const unavailable = Shop.unavailableFor(type.id);
+    const params = new URLSearchParams(location.search);
+    const valid = (c) => colors.some((x) => x.id === c);
+    const picked = [
+      valid(params.get('color')) ? params.get('color') : design.color,
+      valid(params.get('color2')) ? params.get('color2') : design.duo.color,
+    ];
+    document.getElementById('typeName').textContent = `Duo set · two ${type.name} binders`;
+    document.getElementById('finishField').hidden = true;
+    const fixed = document.getElementById('finishFixed');
+    fixed.hidden = false;
+    canvas.setAttribute('aria-label', `${design.name} binder pair`);
+
+    // A second "colour" row for the right-hand binder, under the first one.
+    const swatches = [document.getElementById('swatches')];
+    const names = [colorName];
+    colorName.parentElement.firstChild.textContent = 'Left binder colour: ';
+    const label2 = document.createElement('p');
+    label2.className = 'label duo-label';
+    names.push(document.createElement('strong'));
+    label2.append('Right binder colour: ', names[1]);
+    swatches.push(document.createElement('div'));
+    swatches[1].className = 'swatches';
+    swatches[1].setAttribute('role', 'radiogroup');
+    swatches[1].setAttribute('aria-label', 'Right binder colour');
+    swatches[0].setAttribute('aria-label', 'Left binder colour');
+    swatches[0].after(label2, swatches[1]);
+
+    const preorderEl = document.getElementById('preorder');
+    const leadTime = document.getElementById('leadTime');
+    const leadText = leadTime.textContent;
+    const finishName = (c) => (Binder.finishes(type.id) || []).find((f) => f.id === Binder.finishOf(type.id, c))?.name || 'PU Leather';
+    const showDetails = () => {
+      picked.forEach((c, i) => { names[i].textContent = Binder.colorName(c); });
+      fixed.querySelector('.fixed-value').textContent = [...new Set(picked.map(finishName))].join(' + ');
+      Shop.renderPrice(document.getElementById('price'), Shop.sale(design, Shop.priceFor(design, picked[0], picked[1])));
+      const pockets = picked.map((c) => (Binder.finishes(type.id) || []).find((f) => f.id === Binder.finishOf(type.id, c))?.cards ?? design.cards ?? 540);
+      document.getElementById('cards').textContent = pockets[0] === pockets[1] ? `Each holds ${pockets[0]} pockets` : `Hold ${pockets[0]} and ${pockets[1]} pockets`;
+      const pre = picked.some((c) => unavailable.includes(c));
+      preorderEl.hidden = !pre;
+      preorderEl.textContent = Shop.PREORDER_NOTE;
+      leadTime.textContent = pre ? 'Pre-order: a colour you picked is out of stock, so your binders will be completed in 3–4 weeks' : leadText;
+    };
+
+    let images = null;
+    const draw = () => {
+      if (images) Shop.renderDuo(canvas, { image: images[0], image2: images[1], color: picked[0], color2: picked[1], type: type.id });
+    };
+    picked.forEach((c, i) => Shop.swatches(swatches[i], colors, c, (id) => {
+      picked[i] = id;
+      showDetails();
+      draw();
+    }, unavailable));
+    showDetails();
+    buyButtons(() => picked[0], 20, () => picked[1]);
+
+    // The saved thumbnail shows the default colours, so show it while the artwork loads.
+    if (picked[0] === design.color && picked[1] === design.duo.color) {
+      const thumb = await Shop.loadImage(Shop.thumbUrl(design)).catch(() => null);
+      if (thumb && !images) Shop.drawPhoto(canvas, thumb);
+    }
+    images = await Promise.all([design.art, design.duo.art].map((src) => Shop.loadImage(src)));
+    draw();
+    return;
+  }
+
   // The home page passes the colour picked on the card, if any.
   const requested = new URLSearchParams(location.search).get('color');
   const unavailable = Shop.unavailableFor(type.id);
@@ -149,8 +217,8 @@
   buyButtons(() => color);
 
   // Quantity buttons and "Add to cart", adding the binder in the colour getColor() returns, at
-  // most `max` in the cart.
-  function buyButtons(getColor, max = 20) {
+  // most `max` in the cart. For a duo, getColor2() is the right-hand binder's colour.
+  function buyButtons(getColor, max = 20, getColor2 = null) {
     let qty = 1;
     const qtyEl = document.getElementById('qty');
     const setQty = (n) => {
@@ -162,7 +230,7 @@
 
     const added = document.getElementById('added');
     document.getElementById('addBtn').addEventListener('click', () => {
-      Shop.addToCart(design.id, getColor(), qty, max);
+      Shop.addToCart(design.id, getColor(), qty, max, getColor2 && getColor2());
       added.hidden = false;
     });
   }

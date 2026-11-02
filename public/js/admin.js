@@ -132,8 +132,10 @@
   };
   redrawColor.replaceChildren(new Option('All colours', ''), ...Binder.COLORS.map((c) => new Option(c.name, c.id)));
 
-  // Published designs drawn onto a binder (not designs on hand) in the chosen colour.
-  const redrawTargets = () => allDesigns.filter((d) => !Shop.isOnHand(d) && (!redrawColor.value || d.color === redrawColor.value));
+  // Published designs drawn onto a binder (not designs on hand) in the chosen colour (either binder
+  // of a duo).
+  const redrawTargets = () => allDesigns.filter((d) => !Shop.isOnHand(d)
+    && (!redrawColor.value || d.color === redrawColor.value || (Shop.isDuo(d) && d.duo.color === redrawColor.value)));
   function showRedrawInfo() {
     const n = redrawTargets().length;
     redrawInfo.textContent = n ? `${n} ${n === 1 ? 'picture' : 'pictures'} will be redrawn.` : 'No designs in that colour.';
@@ -153,7 +155,10 @@
       try {
         const art = await Shop.loadImage(d.art);
         const canvas = document.createElement('canvas');
-        Binder.render(canvas, { image: art, color: d.color, type: Shop.designType(d).id, scale: 0.5 });
+        if (Shop.isDuo(d)) {
+          const art2 = await Shop.loadImage(d.duo.art);
+          Shop.renderDuo(canvas, { image: art, image2: art2, color: d.color, color2: d.duo.color, type: Shop.designType(d).id, scale: 0.5 });
+        } else Binder.render(canvas, { image: art, color: d.color, type: Shop.designType(d).id, scale: 0.5 });
         await adminFetch(`/api/designs/${encodeURIComponent(d.id)}/thumb`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -456,13 +461,19 @@
     return wrap;
   }
 
+  // A queued upload set up as a duo (ticked, with its right-hand artwork chosen; not on hand).
+  const isDuoItem = (item) => !!(item.duo && item.img2) && !Shop.isOnHand(item);
+
   function buildQueueItem(item) {
     const el = document.createElement('div');
     el.className = 'queue-item';
 
     const canvas = document.createElement('canvas');
-    const draw = () => (Shop.isOnHand(item) ? Shop.drawPhoto(canvas, item.img, 500)
-      : Binder.render(canvas, { image: item.img, color: item.color, type: item.type, scale: 0.25 }));
+    const draw = () => {
+      if (Shop.isOnHand(item)) Shop.drawPhoto(canvas, item.img, 500);
+      else if (isDuoItem(item)) Shop.renderDuo(canvas, { image: item.img, image2: item.img2, color: item.color, color2: item.color2, type: item.type, scale: 0.25 });
+      else Binder.render(canvas, { image: item.img, color: item.color, type: item.type, scale: 0.25 });
+    };
 
     const warn = document.createElement('div');
     warn.className = 'file-info warn';
@@ -494,19 +505,57 @@
 
     const backField = backPhotoField((file) => { item.backFile = file; });
     const showBack = () => { backField.hidden = !Shop.isOnHand(item); };
-    const pagePicker = pageField(item, () => { checkRatio(); draw(); showBack(); });
+    const pagePicker = pageField(item, () => { checkRatio(); draw(); showBack(); showDuo(); });
 
     const colorField = document.createElement('label');
     colorField.className = 'field';
-    colorField.innerHTML = '<span>Binder colour</span>';
+    const colorLabel = document.createElement('span');
+    colorLabel.textContent = 'Binder colour';
     const select = document.createElement('select');
     const fillColors = () => {
       const colors = Binder.typeColors(item.type);
       if (!colors.some((c) => c.id === item.color)) item.color = colors[0].id;
+      if (!colors.some((c) => c.id === item.color2)) item.color2 = item.color;
       select.replaceChildren(...colors.map((c) => new Option(c.name, c.id, false, c.id === item.color)));
+      select2.replaceChildren(...colors.map((c) => new Option(c.name, c.id, false, c.id === item.color2)));
     };
     select.addEventListener('change', () => { item.color = select.value; draw(); });
-    colorField.appendChild(select);
+    colorField.append(colorLabel, select);
+
+    // Duo set: a second artwork on a right-hand binder, the two sold together as a pair.
+    const duoToggle = document.createElement('label');
+    duoToggle.className = 'sub-check duo-toggle';
+    const duoBox = document.createElement('input');
+    duoBox.type = 'checkbox';
+    duoBox.checked = !!item.duo;
+    duoToggle.append(duoBox, document.createTextNode('Duo set: two binders sold as a pair'));
+    const duoFields = document.createElement('div');
+    duoFields.className = 'duo-fields';
+    const art2Input = document.createElement('input');
+    art2Input.type = 'file';
+    art2Input.accept = 'image/png,image/jpeg,image/webp';
+    art2Input.addEventListener('change', async () => {
+      const file = art2Input.files[0];
+      const img = file && /^image\/(png|jpeg|webp)$/.test(file.type) ? await Shop.loadImage(URL.createObjectURL(file)).catch(() => null) : null;
+      if (!img) return;
+      item.file2 = file;
+      item.img2 = img;
+      showDuo();
+      draw();
+    });
+    const select2 = document.createElement('select');
+    select2.addEventListener('change', () => { item.color2 = select2.value; draw(); });
+    duoFields.append(field('Right binder artwork', art2Input), field('Right binder colour', select2));
+    const showDuo = () => {
+      duoToggle.hidden = Shop.isOnHand(item); // a design on hand is a single binder
+      duoFields.hidden = !item.duo || duoToggle.hidden;
+      colorLabel.textContent = isDuoItem(item) ? 'Left binder colour' : 'Binder colour';
+    };
+    duoBox.addEventListener('change', () => {
+      item.duo = duoBox.checked;
+      showDuo();
+      draw();
+    });
 
     typeSelect.addEventListener('change', () => {
       item.type = typeSelect.value;
@@ -550,9 +599,10 @@
       renderQueue();
     });
 
-    el.append(canvas, warn, nameField, pagePicker, backField, typeField, colorField, cardsField, discountField, remove);
+    el.append(canvas, warn, nameField, pagePicker, backField, typeField, duoToggle, colorField, duoFields, cardsField, discountField, remove);
     item.el = el;
     showBack();
+    showDuo();
     fillColors();
     checkRatio();
     draw();
@@ -593,6 +643,8 @@
     if (badDiscount) return setStatus(`"${badDiscount.name}" has an invalid discount (a whole number from 0 to 90, or leave it blank).`, true);
     const noPage = queue.find((i) => !i.page);
     if (noPage) return setStatus(`"${noPage.name}" needs a page. Add one in Pages above first.`, true);
+    const noArt2 = queue.find((i) => i.duo && !i.img2 && !Shop.isOnHand(i));
+    if (noArt2) return setStatus(`"${noArt2.name}" is a duo set, so it needs the right binder's artwork too (or untick Duo set).`, true);
 
     publishBtn.disabled = true;
     const total = queue.length;
@@ -603,7 +655,9 @@
         setStatus(`Publishing ${done + 1} of ${total}…`);
         const thumbCanvas = document.createElement('canvas');
         await Binder.feltReady; // so velvet thumbnails use the velvet photo
+        const duo = isDuoItem(item);
         if (Shop.isOnHand(item)) Shop.drawPhoto(thumbCanvas, item.img, 800);
+        else if (duo) Shop.renderDuo(thumbCanvas, { image: item.img, image2: item.img2, color: item.color, color2: item.color2, type: item.type, scale: 0.5 });
         else Binder.render(thumbCanvas, { image: item.img, color: item.color, type: item.type, scale: 0.5 });
         const res = await AdminAuth.fetch('/api/designs', {
           method: 'POST',
@@ -619,6 +673,8 @@
             discount: item.discount === '' ? 0 : Number(item.discount),
             art: await fileToDataUrl(item.file),
             back: Shop.isOnHand(item) && item.backFile ? await fileToDataUrl(item.backFile) : undefined,
+            art2: duo ? await fileToDataUrl(item.file2) : undefined,
+            color2: duo ? item.color2 : undefined,
             thumb: thumbCanvas.toDataURL('image/webp', 0.85),
           }),
         });
@@ -715,7 +771,8 @@
       title.textContent = d.name;
       const meta = document.createElement('span');
       meta.className = 'muted';
-      meta.textContent = `${Shop.designType(d).name} · ${Binder.colorName(d.color)} · ${d.cards ?? 540} pockets · ${Shop.money(d.price)}`
+      const colorText = Shop.isDuo(d) ? `Duo set · ${Binder.colorName(d.color)} + ${Binder.colorName(d.duo.color)}` : Binder.colorName(d.color);
+      meta.textContent = `${Shop.designType(d).name} · ${colorText} · ${d.cards ?? 540} pockets · ${Shop.money(d.price)}`
         + (d.discount > 0 ? ` · ${d.discount}% off` : '');
       const onPage = !!Shop.pageOf(d, collections);
       const pages = document.createElement('span');
@@ -756,14 +813,20 @@
 
     function showEdit() {
       const draft = { name: d.name, page: d.page, subclasses: [...(d.subclasses || [])], type: Shop.designType(d).id, color: d.color, cards: d.cards ?? '', price: d.price, discount: d.discount || '' };
+      // A duo keeps its right-hand artwork; its colour can be changed here.
+      if (d.duo) Object.assign(draft, { duo: d.duo, color2: d.duo.color });
       const canvas = document.createElement('canvas');
       let art = null;
+      let art2 = null;
       const draw = () => {
         backField.hidden = !Shop.isOnHand(draft);
+        color2Field.hidden = !Shop.isDuo(draft);
         if (!art) return;
         if (Shop.isOnHand(draft)) Shop.drawPhoto(canvas, art, 500);
+        else if (Shop.isDuo(draft) && art2) Shop.renderDuo(canvas, { image: art, image2: art2, color: draft.color, color2: draft.color2, type: draft.type, scale: 0.25 });
         else Binder.render(canvas, { image: art, color: draft.color, type: draft.type, scale: 0.25 });
       };
+      if (d.duo) Shop.loadImage(d.duo.art).then((img) => { art2 = img; draw(); }).catch(() => {});
       // undefined: keep the saved back photo; a File: replace it; null: remove it.
       let backChange;
       const backField = backPhotoField((file) => { backChange = file; }, d.back || null);
@@ -779,14 +842,20 @@
       for (const t of Binder.TYPES) typeSelect.add(new Option(`${t.name} (${t.ratio[0]}:${t.ratio[1]} art)`, t.id, false, t.id === draft.type));
 
       const colorSelect = document.createElement('select');
+      const colorSelect2 = document.createElement('select');
       const fillColors = () => {
         const colors = Binder.typeColors(draft.type);
         if (!colors.some((c) => c.id === draft.color)) draft.color = colors[0].id;
+        if (!colors.some((c) => c.id === draft.color2)) draft.color2 = draft.color;
         colorSelect.replaceChildren(...colors.map((c) => new Option(c.name, c.id, false, c.id === draft.color)));
+        colorSelect2.replaceChildren(...colors.map((c) => new Option(c.name, c.id, false, c.id === draft.color2)));
       };
+      const color2Field = field('Right binder colour', colorSelect2);
+      color2Field.hidden = !Shop.isDuo(draft);
       fillColors();
       typeSelect.addEventListener('change', () => { draft.type = typeSelect.value; fillColors(); draw(); });
       colorSelect.addEventListener('change', () => { draft.color = colorSelect.value; draw(); });
+      colorSelect2.addEventListener('change', () => { draft.color2 = colorSelect2.value; draw(); });
 
       const cards = document.createElement('input');
       cards.type = 'number';
@@ -829,17 +898,22 @@
         error.hidden = true;
         save.disabled = true;
         const body = { name: draft.name.trim(), page: draft.page, subclasses: draft.subclasses, type: draft.type, color: draft.color, cards: Number(draft.cards), price: Number(draft.price), discount: draft.discount === '' ? 0 : Number(draft.discount) };
+        if (d.duo) body.color2 = draft.color2;
         if (backChange) body.back = await fileToDataUrl(backChange);
         else if (backChange === null) body.removeBack = true;
         // The shop thumbnail shows the type and colour (or the photo, for designs on hand), so
         // redraw it when any of those changed.
         const onHand = Shop.isOnHand(draft);
         // Velvet thumbnails are always redrawn, so older ones pick up the current velvet texture.
-        const velvet = Binder.finishOf(draft.type, draft.color) === 'velvet';
-        if ((draft.type !== Shop.designType(d).id || draft.color !== d.color || onHand !== Shop.isOnHand(d) || (velvet && !onHand)) && art) {
+        const duo = Shop.isDuo(draft);
+        const velvet = [draft.color, duo && draft.color2].some((c) => c && Binder.finishOf(draft.type, c) === 'velvet');
+        const changed = draft.type !== Shop.designType(d).id || draft.color !== d.color || onHand !== Shop.isOnHand(d)
+          || (duo && draft.color2 !== d.duo.color);
+        if ((changed || (velvet && !onHand)) && art && (!duo || art2)) {
           await Binder.feltReady;
           const thumb = document.createElement('canvas');
           if (onHand) Shop.drawPhoto(thumb, art, 800);
+          else if (duo) Shop.renderDuo(thumb, { image: art, image2: art2, color: draft.color, color2: draft.color2, type: draft.type, scale: 0.5 });
           else Binder.render(thumb, { image: art, color: draft.color, type: draft.type, scale: 0.5 });
           body.thumb = thumb.toDataURL('image/webp', 0.85);
         }
@@ -866,7 +940,7 @@
 
       el.replaceChildren(canvas, field('Name', name), pageField(draft, draw), backField,
         field('Binder type', typeSelect),
-        field('Binder colour', colorSelect), sizeRow, field('Discount % (optional)', discount), error, actions);
+        field(d.duo ? 'Left binder colour' : 'Binder colour', colorSelect), color2Field, sizeRow, field('Discount % (optional)', discount), error, actions);
     }
 
     showView();

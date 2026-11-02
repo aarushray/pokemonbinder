@@ -42,7 +42,7 @@
       name: d.name,
       href: `design.html?id=${encodeURIComponent(d.id)}`,
       type: Shop.designType(d),
-      unit: Shop.sale(d, Shop.priceFor(d, item.color)),
+      unit: Shop.sale(d, Shop.priceFor(d, item.color, item.color2)),
     };
   }
 
@@ -62,7 +62,7 @@
       const maxQty = onHand ? 1 : 20;
       if (item.qty > maxQty) {
         item.qty = maxQty;
-        Shop.setQty(item.id, item.color, maxQty);
+        Shop.setQty(item.id, item.color, maxQty, item.color2);
       }
       typeIds.push(type.id);
       total += unit.price * item.qty;
@@ -76,8 +76,16 @@
       if (href) thumb.href = href;
       const canvas = document.createElement('canvas');
       thumb.appendChild(canvas);
-      art(item).then((img) => (onHand && img ? Shop.drawPhoto(canvas, img, 300)
-        : Binder.render(canvas, { image: img, color: item.color, type: type.id, scale: 0.15 })));
+      // A duo shows both binders side by side (its right-hand artwork loads separately).
+      const duo = !Shop.isCustom(item) && Shop.isDuo(byId.get(item.id));
+      const colors = duo ? [item.color, item.color2 || byId.get(item.id).duo.color] : [item.color];
+      if (duo) {
+        Promise.all([art(item), Shop.loadImage(byId.get(item.id).duo.art).catch(() => null)])
+          .then(([img, img2]) => Shop.renderDuo(canvas, { image: img, image2: img2, color: colors[0], color2: colors[1], type: type.id, scale: 0.15 }));
+      } else {
+        art(item).then((img) => (onHand && img ? Shop.drawPhoto(canvas, img, 300)
+          : Binder.render(canvas, { image: img, color: item.color, type: type.id, scale: 0.15 })));
+      }
 
       const info = document.createElement('div');
       const name = document.createElement(href ? 'a' : 'span');
@@ -87,13 +95,13 @@
       const meta = document.createElement('div');
       meta.className = 'meta';
       const finish = (Binder.finishes(type.id) || []).find((f) => f.id === Binder.finishOf(type.id, item.color));
-      meta.textContent = `${type.name}${finish && Shop.isCustom(item) ? ` · ${finish.name}` : ''} · ${Binder.colorName(item.color)} · `;
+      meta.textContent = `${type.name}${finish && Shop.isCustom(item) ? ` · ${finish.name}` : ''}${duo ? ' pair' : ''} · ${colors.map(Binder.colorName).join(' + ')} · `;
 
       const unitEl = document.createElement('span');
       Shop.renderPrice(unitEl, unit);
       meta.appendChild(unitEl);
       info.append(name, meta);
-      if (!onHand && Shop.isPreorder(type.id, item.color)) {
+      if (!onHand && colors.some((c) => Shop.isPreorder(type.id, c))) {
         const pre = document.createElement('div');
         pre.className = 'preorder-note';
         pre.textContent = Shop.PREORDER_NOTE;
@@ -108,21 +116,21 @@
       minus.type = 'button';
       minus.textContent = '−';
       minus.setAttribute('aria-label', 'Decrease quantity');
-      minus.addEventListener('click', () => { Shop.setQty(item.id, item.color, item.qty - 1); render(); });
+      minus.addEventListener('click', () => { Shop.setQty(item.id, item.color, item.qty - 1, item.color2); render(); });
       const n = document.createElement('span');
       n.textContent = item.qty;
       const plus = document.createElement('button');
       plus.type = 'button';
       plus.textContent = '+';
       plus.setAttribute('aria-label', 'Increase quantity');
-      plus.addEventListener('click', () => { Shop.setQty(item.id, item.color, Math.min(maxQty, item.qty + 1)); render(); });
+      plus.addEventListener('click', () => { Shop.setQty(item.id, item.color, Math.min(maxQty, item.qty + 1), item.color2); render(); });
       plus.disabled = item.qty >= maxQty;
       qty.append(minus, n, plus);
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'link';
       remove.textContent = 'Remove';
-      remove.addEventListener('click', () => { Shop.setQty(item.id, item.color, 0); render(); });
+      remove.addEventListener('click', () => { Shop.setQty(item.id, item.color, 0, item.color2); render(); });
       right.append(qty, remove);
 
       line.append(thumb, info, right);
@@ -316,7 +324,7 @@
       pendingOrderId = pendingOrderId || crypto.randomUUID();
       const lines = await Promise.all(items.map(async (i, index) => (Shop.isCustom(i)
         ? { custom: true, type: i.type, color: i.color, qty: i.qty, art_path: await uploadArt(user, i, pendingOrderId, d.name, index) }
-        : { id: i.id, color: i.color, qty: i.qty })));
+        : { id: i.id, color: i.color, ...(i.color2 ? { color2: i.color2 } : {}), qty: i.qty })));
       const { data: { session } } = await Account.client.auth.getSession();
       const res = await fetch('/api/checkout', {
         method: 'POST',

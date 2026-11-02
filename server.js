@@ -11,6 +11,9 @@
 // A design on hand (one of a kind) gets soldOrderId once someone orders it, which hides it from the
 // shop; cancelling that order (or "Put back on sale" on the admin page) clears it. It may also have
 // `back`, a photo of the binder's back cover.
+// A duo design is a pair of binders sold together: `duo: { art, color }` is the right-hand binder's
+// artwork and default colour (the design's own art and colour are the left one's). Both binders are
+// the same type, the price is for the pair, and customers pick each binder's colour.
 // Collections are the shop's pages. Each design belongs to one page (`page`, a collection id) and
 // may be tagged with some of that page's subclasses (`subclasses`), which the shop uses as filters.
 //
@@ -263,7 +266,8 @@ function validateFields(body, db) {
   if (discount > 0 && db.settings.storeDiscount > 0) {
     return { error: 'A storewide discount is on, so binders can\'t have their own discount. Set the storewide discount to 0 first.' };
   }
-  return { fields: { name, price, color: body.color, type: type.id, cards, page: page.id, subclasses, discount } };
+  if (body.color2 !== undefined && !type.colors.includes(body.color2)) return { error: `The second binder's colour isn't available for the ${type.name}` };
+  return { fields: { name, price, color: body.color, type: type.id, cards, page: page.id, subclasses, discount }, color2: body.color2 };
 }
 
 // A discount percentage: blank means none (0); otherwise a whole number from 0 to 90. Null if invalid.
@@ -370,7 +374,7 @@ const PAID_STATUSES = ['paid', 'in_production', 'shipped', 'completed'];
 
 // Changes the stock counts by the binders in an order's lines (sign -1 takes them, +1 returns
 // them). Only colours with a count are changed. Designs on hand don't use a blank binder, and
-// pre-orders were for colours with none in stock, so neither changes the counts. A count that
+// pre-ordered binders were for colours with none in stock, so neither changes the counts. A count that
 // reaches 0 crosses the colour out; above 0 makes it available again. Returns notes such as
 // "9-slots Yellow: 4 left" for the admin.
 function adjustStock(lines, sign) {
@@ -380,10 +384,14 @@ function adjustStock(lines, sign) {
   for (const l of lines || []) {
     const type = BINDER_TYPES.find((t) => t.name === l.binder_type);
     const design = l.design_id && db.designs.find((d) => d.id === l.design_id);
-    if (!type || l.preorder || (design && isOnHand(design))) continue;
-    if (!Number.isInteger((inventory[type.id] || {})[l.color])) continue; // not tracked
-    const key = `${type.id}|${l.color}`;
-    used.set(key, (used.get(key) || 0) + (Number(l.qty) || 0));
+    if (!type || (design && isOnHand(design))) continue;
+    // Lines list the binders that come from stock (a duo has two); older lines are one binder.
+    const fromStock = Array.isArray(l.from_stock) ? l.from_stock : l.preorder ? [] : [l.color];
+    for (const color of fromStock) {
+      if (!Number.isInteger((inventory[type.id] || {})[color])) continue; // not tracked
+      const key = `${type.id}|${color}`;
+      used.set(key, (used.get(key) || 0) + (Number(l.qty) || 0));
+    }
   }
   const notes = [];
   for (const [key, qty] of used) {
@@ -404,6 +412,8 @@ function adjustStock(lines, sign) {
 // Every page has it, so it can't be removed.
 const ON_HAND = 'Designs on hand';
 const isOnHand = (design) => (design.subclasses || []).some((s) => normTag(s) === normTag(ON_HAND));
+// A pair of binders sold together (designs on hand are always a single binder).
+const isDuo = (design) => !!(design.duo && design.duo.art) && !isOnHand(design);
 const withOnHand = (list) => (list.some((s) => normTag(s) === normTag(ON_HAND)) ? list : [...list, ON_HAND]);
 
 // Most subclasses one page can have.
@@ -428,7 +438,7 @@ function cleanNames(input) {
 async function createDesign(req, res) {
   const body = JSON.parse(await readBody(req));
   const db = readDb();
-  const { error, fields } = validateFields(body, db);
+  const { error, fields, color2 } = validateFields(body, db);
   if (error) return sendJson(res, 400, { error });
 
   const id = `${slug(fields.name)}-${crypto.randomBytes(3).toString('hex')}`;
@@ -440,6 +450,7 @@ async function createDesign(req, res) {
     createdAt: new Date().toISOString(),
   };
   if (body.back) design.back = saveDataUrl(body.back, `${id}-back`);
+  if (body.art2) design.duo = { art: saveDataUrl(body.art2, `${id}-art2`), color: color2 || fields.color };
   db.designs.unshift(design);
   writeDb(db);
   sendJson(res, 201, design);
@@ -452,8 +463,13 @@ async function updateDesign(id, req, res) {
   const db = readDb();
   const design = db.designs.find((d) => d.id === id);
   if (!design) return sendJson(res, 404, { error: 'Design not found' });
-  const { error, fields } = validateFields(body, db);
+  const { error, fields, color2 } = validateFields(body, db);
   if (error) return sendJson(res, 400, { error });
+  if (design.duo) {
+    // A new size can drop the old right-hand colour; it then follows the left one.
+    const type = BINDER_TYPES.find((t) => t.id === fields.type);
+    design.duo.color = color2 || (type.colors.includes(design.duo.color) ? design.duo.color : fields.color);
+  }
 
   if (body.thumb) {
     const thumb = saveDataUrl(body.thumb, `${id}-thumb`);
@@ -585,7 +601,7 @@ function deleteDesign(id, res) {
   const db = readDb();
   const design = db.designs.find((d) => d.id === id);
   if (!design) return sendJson(res, 404, { error: 'Design not found' });
-  for (const rel of [design.art, design.thumb, design.back]) if (rel) removeDesignFile(rel);
+  for (const rel of [design.art, design.thumb, design.back, design.duo && design.duo.art]) if (rel) removeDesignFile(rel);
   db.designs = db.designs.filter((d) => d.id !== id);
   db.settings.featured = db.settings.featured.filter((x) => x !== id);
   writeDb(db);
@@ -855,15 +871,24 @@ function priceLine(item, user, db) {
   if (onHand && design.soldOrderId) throw badRequest(`Sorry, "${design.name}" has just been sold. Please remove it from your cart.`);
   if (onHand && qty !== 1) throw badRequest(`"${design.name}" is one of a kind, so you can only order one.`);
   if (onHand && color !== design.color) throw badRequest(`"${design.name}" is a binder on hand and only comes in ${colorName(design.color)}. Please remove it and add it again.`);
-  const finish = finishOf(type, color);
-  const original = design.price + ((finish && finish.extraPrice) || 0);
+  // A duo is two binders: the second colour is the right-hand binder's.
+  const duo = isDuo(design);
+  const color2 = duo ? String(item.color2 || '') : null;
+  if (duo && !type.colors.includes(color2)) throw badRequest(`Please choose a colour for both binders of "${design.name}".`);
+  const colors = duo ? [color, color2] : [color];
+  const extra = (c) => { const f = finishOf(type, c); return (f && f.extraPrice) || 0; };
+  const original = design.price + colors.reduce((sum, c) => sum + extra(c), 0);
   const discount = db.settings.storeDiscount > 0 ? db.settings.storeDiscount : design.discount || 0;
   const price = discount ? Math.round(original * (100 - discount)) / 100 : original;
+  // Colours that are out of stock are made as a pre-order (designs on hand are already made).
+  // from_stock lists the binders the stock counts give up when the order is paid.
+  const out = colors.filter((c) => !onHand && outOfStock(db, type, c));
   return {
-    design_id: design.id, name: design.name, binder_type: type.name, color, color_name: colorName(color),
-    unit_price: price, original_price: original, discount_percent: discount, qty,
-    // A colour that's out of stock is made as a pre-order (designs on hand are already made).
-    ...(!onHand && outOfStock(db, type, color) ? { preorder: true } : {}),
+    design_id: design.id, name: duo ? `${design.name} (duo set)` : design.name, binder_type: type.name,
+    color, color_name: colors.map(colorName).join(' + '), unit_price: price, original_price: original, discount_percent: discount, qty,
+    ...(duo ? { duo: true, color2 } : {}),
+    ...(out.length ? { preorder: true } : {}),
+    from_stock: onHand ? [] : colors.filter((c) => !out.includes(c)),
   };
 }
 
