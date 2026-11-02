@@ -25,19 +25,22 @@ const Shop = (() => {
     return Binder.getType(design.type);
   }
 
+  // Cart lines are { id, color, qty }, plus color2 (the right-hand binder's colour) for a duo.
   // `max` caps the line's quantity (designs on hand are one of a kind).
-  function addToCart(id, color, qty, max = Infinity) {
+  const sameLine = (i, id, color, color2) => i.id === id && i.color === color && (i.color2 || null) === (color2 || null);
+
+  function addToCart(id, color, qty, max = Infinity, color2 = null) {
     const items = readCart();
-    const line = items.find((i) => i.id === id && i.color === color);
+    const line = items.find((i) => sameLine(i, id, color, color2));
     if (line) line.qty = Math.min(max, line.qty + qty);
-    else items.push({ id, color, qty: Math.min(max, qty) });
+    else items.push({ id, color, ...(color2 ? { color2 } : {}), qty: Math.min(max, qty) });
     writeCart(items);
   }
 
-  function setQty(id, color, qty) {
+  function setQty(id, color, qty, color2 = null) {
     let items = readCart();
-    if (qty <= 0) items = items.filter((i) => !(i.id === id && i.color === color));
-    else for (const i of items) if (i.id === id && i.color === color) i.qty = qty;
+    if (qty <= 0) items = items.filter((i) => !sameLine(i, id, color, color2));
+    else for (const i of items) if (sameLine(i, id, color, color2)) i.qty = qty;
     writeCart(items);
   }
 
@@ -164,10 +167,12 @@ const Shop = (() => {
   const money = (n) => `$${Number(n).toFixed(2)}`;
 
   // Price of a design in a colour: the admin's price, plus the texture surcharge when that colour
-  // is a velvet one (velvet is always $5 more than diamond).
-  function priceFor(design, color) {
+  // is a velvet one (velvet is always $5 more than diamond). A duo's price is for the pair, with a
+  // surcharge for each velvet binder (color2 is the right-hand one's colour).
+  function priceFor(design, color, color2 = null) {
     const typeId = designType(design).id;
-    return design.price + Binder.finishExtra(typeId, Binder.finishOf(typeId, color));
+    const extra = (c) => Binder.finishExtra(typeId, Binder.finishOf(typeId, c));
+    return design.price + extra(color) + (isDuo(design) ? extra(color2 || design.duo.color) : 0);
   }
 
   // Discount on a shop design: the storewide one while it's on (binders' own discounts are reset
@@ -209,6 +214,38 @@ const Shop = (() => {
   // Each is one of a kind, so it can only be bought one at a time.
   const ON_HAND = 'Designs on hand';
   const isOnHand = (d) => (d.subclasses || []).some((s) => normTag(s) === normTag(ON_HAND));
+
+  // Duo designs: two binders sold as a pair. `duo: { art, color }` is the right-hand binder's
+  // artwork and default colour; the design's own are the left one's.
+  const isDuo = (d) => !!(d && d.duo && d.duo.art) && !isOnHand(d);
+  let feltLoaded = false;
+  Binder.feltReady.then(() => { feltLoaded = true; });
+
+  // Draws two binders side by side: options are Binder.render's, plus image2 and color2 for the
+  // right-hand binder. Velvet is redrawn once its texture photo has loaded.
+  function renderDuo(canvas, options) {
+    canvas.duoOptions = options;
+    const left = document.createElement('canvas');
+    const right = document.createElement('canvas');
+    const a = Binder.render(left, options);
+    const b = Binder.render(right, { ...options, image: options.image2, color: options.color2 });
+    const gap = Math.round(a.bw * 0.06);
+    // Each render has a margin around the binder (for its shadow); overlap the inner margins.
+    const x2 = a.x0 + a.bw + gap - b.x0;
+    canvas.width = x2 + right.width;
+    canvas.height = Math.max(left.height, right.height);
+    const g = canvas.getContext('2d');
+    g.drawImage(left, 0, 0);
+    g.drawImage(right, x2, 0);
+    const velvet = [options.color, options.color2].some((c) => Binder.finishOf(options.type, c) === 'velvet');
+    if (velvet && !feltLoaded && !canvas.duoWaiting) {
+      canvas.duoWaiting = true;
+      Binder.feltReady.then(() => {
+        canvas.duoWaiting = false;
+        if (canvas.duoOptions === options) renderDuo(canvas, options);
+      });
+    }
+  }
 
   // Draws a photo into a canvas, shrunk to at most `max` px on its longer side.
   function drawPhoto(canvas, image, max = Infinity) {
@@ -619,6 +656,6 @@ const Shop = (() => {
 
   return {
     unavailableFor, isPreorder, PREORDER_NOTE, defaultBanner, saleBanner, coverSlides, isCustom, customPrice, addCustomToCart, customArtIds, priceFor, discountFor, sale, renderPrice, readCart, addToCart, setQty, clearCart, stashCart, restoreCart, pruneCart, loadDesigns, loadImage, money, thumbUrl, swatches, designType,
-    loadCatalog, normTag, sortSubclasses, pageOf, currentPage, setPage, ON_HAND, isOnHand, drawPhoto,
+    loadCatalog, normTag, sortSubclasses, pageOf, currentPage, setPage, ON_HAND, isOnHand, drawPhoto, isDuo, renderDuo,
   };
 })();

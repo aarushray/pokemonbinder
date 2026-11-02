@@ -73,6 +73,17 @@
       continue;
     }
 
+    // A duo is a pair of binders; customers pick each binder's colour on its own page.
+    if (Shop.isDuo(d)) {
+      const pre = [d.color, d.duo.color].some((c) => Shop.isPreorder(type.id, c));
+      sub.textContent = `Duo set · ${type.name} · ${Binder.colorName(d.color)} + ${Binder.colorName(d.duo.color)}${pre ? ' · Pre-order' : ''}`;
+      img.alt = `${d.name} binder pair`;
+      card.classList.add('card-duo');
+      card.append(link);
+      cards.push({ el: card, design: d, subs: new Set((d.subclasses || []).map(Shop.normTag)) });
+      continue;
+    }
+
     // Other colours are rendered on demand from the full artwork (loaded on first use).
     let art = null;
     let current = d.color;
