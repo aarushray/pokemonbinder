@@ -218,6 +218,8 @@ const Shop = (() => {
   // Duo designs: two binders sold as a pair. `duo: { art, color }` is the right-hand binder's
   // artwork and default colour; the design's own are the left one's.
   const isDuo = (d) => !!(d && d.duo && d.duo.art) && !isOnHand(d);
+  // Every page has a "Duo" subclass; the server tags each duo set with it (and only duo sets).
+  const DUO = 'Duo';
   let feltLoaded = false;
   Binder.feltReady.then(() => { feltLoaded = true; });
 
@@ -303,10 +305,12 @@ const Shop = (() => {
   }
 
   // Subclasses in display order: "Designs on hand" first, then names with the word "series", then
-  // names starting with a number ("4th" before "30th"), then the rest (e.g. Pokémon names)
-  // alphabetically. Within each group, numbers inside names sort numerically ("Series 2" before "Series 10").
+  // names starting with a number ("4th" before "30th"), then "Duo", then the rest (e.g. Pokémon
+  // names) alphabetically. Within each group, numbers inside names sort numerically ("Series 2"
+  // before "Series 10").
   function sortSubclasses(list) {
-    const group = (s) => (normTag(s) === normTag(ON_HAND) ? -1 : /\bseries\b/i.test(s) ? 0 : /^\d/.test(s) ? 1 : 2);
+    const group = (s) => (normTag(s) === normTag(ON_HAND) ? -1 : /\bseries\b/i.test(s) ? 0 : /^\d/.test(s) ? 1
+      : normTag(s) === normTag(DUO) ? 1.5 : 2);
     return [...list].sort((a, b) =>
       group(a) - group(b) || a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
   }
@@ -664,6 +668,6 @@ const Shop = (() => {
 
   return {
     unavailableFor, isPreorder, PREORDER_NOTE, defaultBanner, saleBanner, coverSlides, isCustom, customPrice, addCustomToCart, customArtIds, priceFor, discountFor, sale, renderPrice, readCart, addToCart, setQty, clearCart, stashCart, restoreCart, pruneCart, loadDesigns, loadImage, money, thumbUrl, swatches, designType,
-    loadCatalog, normTag, sortSubclasses, pageOf, currentPage, setPage, ON_HAND, isOnHand, drawPhoto, isDuo, renderDuo,
+    loadCatalog, normTag, sortSubclasses, pageOf, currentPage, setPage, ON_HAND, isOnHand, drawPhoto, isDuo, renderDuo, DUO,
   };
 })();

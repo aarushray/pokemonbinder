@@ -62,7 +62,8 @@
       const subs = document.createElement('div');
       subs.className = 'sub-checks';
       if (page && page.subclasses.length) {
-        for (const s of Shop.sortSubclasses(page.subclasses)) {
+        // "Duo" isn't ticked by hand: duo sets get it automatically.
+        for (const s of Shop.sortSubclasses(page.subclasses).filter((x) => Shop.normTag(x) !== Shop.normTag(Shop.DUO))) {
           const label = document.createElement('label');
           label.className = 'sub-check';
           const box = document.createElement('input');
@@ -206,7 +207,7 @@
       x.textContent = '×';
       x.setAttribute('aria-label', `Remove subclass ${s}`);
       x.addEventListener('click', () => removeSubclass(c, s, n));
-      if (Shop.normTag(s) !== Shop.normTag(Shop.ON_HAND)) chip.appendChild(x); // built in, can't be removed
+      if (![Shop.ON_HAND, Shop.DUO].some((b) => Shop.normTag(b) === Shop.normTag(s))) chip.appendChild(x); // built in, can't be removed
       subs.appendChild(chip);
     }
     const form = document.createElement('form');

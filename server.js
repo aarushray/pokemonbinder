@@ -101,7 +101,7 @@ function readDb() {
   }
   if (!Array.isArray(db.collections)) db.collections = DEFAULT_COLLECTIONS.map((c) => ({ ...c }));
   for (const c of db.collections) {
-    c.subclasses = withOnHand(Array.isArray(c.subclasses) ? c.subclasses : []);
+    c.subclasses = withBuiltIns(Array.isArray(c.subclasses) ? c.subclasses : []);
     delete c.pinned; // no longer used
   }
   if (!db.settings || typeof db.settings !== 'object') db.settings = {};
@@ -137,6 +137,7 @@ function migrate() {
     if (!Array.isArray(d.subclasses)) d.subclasses = [];
     delete d.tags;
     delete d.genre;
+    tagDuo(d);
   }
   writeDb(db);
 }
@@ -414,7 +415,16 @@ const ON_HAND = 'Designs on hand';
 const isOnHand = (design) => (design.subclasses || []).some((s) => normTag(s) === normTag(ON_HAND));
 // A pair of binders sold together (designs on hand are always a single binder).
 const isDuo = (design) => !!(design.duo && design.duo.art) && !isOnHand(design);
-const withOnHand = (list) => (list.some((s) => normTag(s) === normTag(ON_HAND)) ? list : [...list, ON_HAND]);
+// Subclass every duo set is tagged with (and only duo sets), so customers can filter to pairs.
+const DUO = 'Duo';
+// Every page has these two built-in subclasses.
+const withBuiltIns = (list) => [ON_HAND, DUO].reduce((l, b) => (l.some((s) => normTag(s) === normTag(b)) ? l : [...l, b]), list);
+
+// Tags a design with Duo if it's a duo set, and untags it otherwise.
+function tagDuo(design) {
+  const rest = (design.subclasses || []).filter((s) => normTag(s) !== normTag(DUO));
+  design.subclasses = isDuo(design) ? [...rest, DUO] : rest;
+}
 
 // Most subclasses one page can have.
 const MAX_SUBCLASSES = 200;
@@ -451,6 +461,7 @@ async function createDesign(req, res) {
   };
   if (body.back) design.back = saveDataUrl(body.back, `${id}-back`);
   if (body.art2) design.duo = { art: saveDataUrl(body.art2, `${id}-art2`), color: color2 || fields.color };
+  tagDuo(design);
   db.designs.unshift(design);
   writeDb(db);
   sendJson(res, 201, design);
@@ -485,6 +496,7 @@ async function updateDesign(id, req, res) {
     if (body.back) design.back = saveDataUrl(body.back, `${id}-back`);
   }
   Object.assign(design, fields, { updatedAt: new Date().toISOString() });
+  tagDuo(design);
   delete design.genre;
   delete design.unavailable;
   delete design.tags;
@@ -518,7 +530,7 @@ async function createCollection(req, res) {
   const base = slug(normTag(name));
   let id = base;
   for (let n = 2; db.collections.some((c) => c.id === id); n++) id = `${base}-${n}`;
-  const collection = { id, name, subclasses: [ON_HAND] };
+  const collection = { id, name, subclasses: withBuiltIns([]) };
   db.collections.push(collection);
   writeDb(db);
   sendJson(res, 201, collection);
@@ -532,7 +544,7 @@ async function updateCollection(id, req, res) {
   const page = db.collections.find((c) => c.id === id);
   if (!page) return sendJson(res, 404, { error: 'Page not found' });
   if (body.subclasses !== undefined) {
-    const subclasses = withOnHand(cleanNames(body.subclasses));
+    const subclasses = withBuiltIns(cleanNames(body.subclasses));
     if (subclasses.length > MAX_SUBCLASSES) return sendJson(res, 400, { error: `A page can have at most ${MAX_SUBCLASSES} subclasses` });
     page.subclasses = subclasses;
     const keep = new Set(page.subclasses.map(normTag));

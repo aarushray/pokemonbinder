@@ -138,9 +138,10 @@
     const subs = page.subclasses || [];
     if (subFilter && !subs.some((s) => Shop.normTag(s) === subFilter)) subFilter = null;
 
-    // "Designs on hand" is on every page; only offer it when the page has some.
-    const sorted = Shop.sortSubclasses(subs).filter((s) => Shop.normTag(s) !== Shop.normTag(Shop.ON_HAND)
-      || onPage.some((c) => Shop.isOnHand(c.design)));
+    // "Designs on hand" and "Duo" are on every page; only offer them when the page has some.
+    const isTag = (s, tag) => Shop.normTag(s) === Shop.normTag(tag);
+    const sorted = Shop.sortSubclasses(subs).filter((s) => (isTag(s, Shop.ON_HAND) ? onPage.some((c) => Shop.isOnHand(c.design))
+      : isTag(s, Shop.DUO) ? onPage.some((c) => Shop.isDuo(c.design)) : true));
     const select = document.createElement('select');
     select.className = 'sub-filter';
     select.setAttribute('aria-label', 'Filter designs');
