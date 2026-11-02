@@ -16,7 +16,8 @@
 //
 // Contact-form messages are saved in .data/messages.json. The dot folder is never served to
 // browsers and is ignored by git, so customers' details stay on this computer. Stock counts typed on
-// the admin page are kept there too, in .data/inventory.json.
+// the admin page are kept there too, in .data/inventory.json, and so are the admin's private notes on
+// orders (.data/order-notes.json), which never reach customers.
 //
 // Customer orders live in Supabase. The admin Orders page reads them through this server using the
 // Supabase secret (service_role) key from the git-ignored .env file; that key never reaches a browser.
@@ -54,6 +55,7 @@ const DB_FILE = path.join(DESIGNS_DIR, 'designs.json');
 const DATA_DIR = STORAGE_DIR ? path.join(STORAGE_DIR, '.data') : path.join(ROOT, '.data');
 const MESSAGES_FILE = path.join(DATA_DIR, 'messages.json');
 const INVENTORY_FILE = path.join(DATA_DIR, 'inventory.json');
+const NOTES_FILE = path.join(DATA_DIR, 'order-notes.json');
 const PORT = Number(process.env.PORT) || 3000;
 const MAX_BODY = 40 * 1024 * 1024;
 
@@ -647,7 +649,77 @@ async function listOrders(res) {
   const ids = [...new Set(orders.map((o) => o.user_id))];
   const profiles = ids.length ? await supa(`/rest/v1/profiles?select=id,email&id=in.(${ids.join(',')})`) : [];
   const emails = new Map(profiles.map((p) => [p.id, p.email]));
-  sendJson(res, 200, orders.map((o) => ({ ...o, account_email: emails.get(o.user_id) || null })));
+  const notes = readNotes();
+  sendJson(res, 200, orders.map((o) => ({ ...o, account_email: emails.get(o.user_id) || null, admin_note: notes[o.id] || '' })));
+}
+
+// The admin's private notes on orders: { orderId: text }. Kept on this server, not in Supabase,
+// because customers can read their own order rows there.
+function readNotes() {
+  try {
+    return JSON.parse(fs.readFileSync(NOTES_FILE, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function writeNote(id, text) {
+  const notes = readNotes();
+  if (text) notes[id] = text;
+  else delete notes[id];
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(NOTES_FILE + '.tmp', JSON.stringify(notes, null, 2));
+  fs.renameSync(NOTES_FILE + '.tmp', NOTES_FILE);
+}
+
+// PUT /api/orders/<id>/note { note } (admin): saves the private note (empty removes it).
+async function saveOrderNote(id, req, res) {
+  const { note } = JSON.parse(await readBody(req, 16 * 1024));
+  const text = String(note ?? '').replace(/\r\n/g, '\n').trim().slice(0, 2000);
+  const [order] = await supa(`/rest/v1/orders?select=id&id=eq.${id}`);
+  if (!order) return sendJson(res, 404, { error: 'Order not found' });
+  writeNote(id, text);
+  sendJson(res, 200, { note: text });
+}
+
+// POST /api/orders/<id>/proof { image: data URL } (admin): adds or replaces the payment screenshot,
+// e.g. one the customer sent privately. A pending order moves to "payment submitted"; the old
+// screenshot, if any, is deleted.
+async function uploadProof(id, req, res) {
+  const { image } = JSON.parse(await readBody(req));
+  const m = /^data:image\/(png|jpeg|webp|heic|heif);base64,([A-Za-z0-9+/=]+)$/.exec(String(image || ''));
+  if (!m) return sendJson(res, 400, { error: 'Please choose a PNG, JPG, WebP or HEIC picture.' });
+  const bytes = Buffer.from(m[2], 'base64');
+  if (bytes.length > 10 * 1024 * 1024) return sendJson(res, 400, { error: 'That picture is over 10 MB. Please choose a smaller one.' });
+  const [order] = await supa(`/rest/v1/orders?select=id,user_id,status,payment_proof_path&id=eq.${id}`);
+  if (!order) return sendJson(res, 404, { error: 'Order not found' });
+
+  // Saved in the customer's folder, like the screenshots they upload themselves.
+  const ext = m[1] === 'jpeg' ? 'jpg' : m[1];
+  const filePath = `${order.user_id}/admin-${id}-${Date.now()}.${ext}`;
+  const headers = { apikey: SUPABASE_SECRET, 'Content-Type': `image/${m[1]}` };
+  if (SUPABASE_SECRET.startsWith('eyJ')) headers.Authorization = `Bearer ${SUPABASE_SECRET}`; // legacy JWT keys
+  const up = await fetch(`${SUPABASE_URL}/storage/v1/object/payment-proofs/${filePath.split('/').map(encodeURIComponent).join('/')}`, { method: 'POST', headers, body: bytes });
+  if (!up.ok) {
+    const body = await up.json().catch(() => ({}));
+    return sendJson(res, 502, { error: `Couldn't upload the picture: ${body.message || body.error || up.status}` });
+  }
+
+  const changes = { payment_proof_path: filePath, payment_submitted_at: new Date().toISOString() };
+  if (order.status === 'pending') changes.status = 'payment_submitted';
+  const [updated] = await supa(`/rest/v1/orders?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify(changes),
+  });
+  if (order.payment_proof_path) {
+    try {
+      await supa('/storage/v1/object/payment-proofs', { method: 'DELETE', body: JSON.stringify({ prefixes: [order.payment_proof_path] }) });
+    } catch {
+      // A leftover old screenshot only takes up storage.
+    }
+  }
+  sendJson(res, 200, updated);
 }
 
 async function updateOrderStatus(id, req, res) {
@@ -687,6 +759,7 @@ async function deleteOrder(id, res) {
     }
   }
   await supa(`/rest/v1/orders?id=eq.${id}`, { method: 'DELETE' });
+  writeNote(id, '');
   sendJson(res, 200, { ok: true });
 }
 
@@ -989,6 +1062,9 @@ http.createServer(async (req, res) => {
     if (artMatch && req.method === 'GET') return await artDownload(artMatch[1], Number(artMatch[2]), res);
     const proofMatch = new RegExp(`^/api/orders/${uuid}/proof$`).exec(pathname);
     if (proofMatch && req.method === 'GET') return await proofLink(proofMatch[1], res);
+    if (proofMatch && req.method === 'POST') return await uploadProof(proofMatch[1], req, res);
+    const noteMatch = new RegExp(`^/api/orders/${uuid}/note$`).exec(pathname);
+    if (noteMatch && req.method === 'PUT') return await saveOrderNote(noteMatch[1], req, res);
     if (pathname === '/api/stock' && req.method === 'PATCH') {
       if (!(await requireAdmin(req, res))) return;
       return await updateStock(req, res);

@@ -736,3 +736,8 @@ input.own-discount:disabled { background: var(--surface); color: var(--muted); c
   .preorder-note { color: #f0b35a; }
   .tag-preorder { background: #3a2a10; color: #f0b35a; }
 }
+/* Admin's private note on an order (never shown to customers). */
+.admin-order-note { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); display: flex; flex-direction: column; gap: 8px; }
+.admin-order-note label { font-size: 0.85rem; color: var(--muted); }
+.admin-order-note textarea { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); resize: vertical; }
+.admin-order-note .row { display: flex; align-items: center; gap: 12px; }
