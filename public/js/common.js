@@ -308,12 +308,14 @@ const Shop = (() => {
   // names starting with a number ("4th" before "30th"), then "Duo", then the rest (e.g. Pokémon
   // names) alphabetically. Within each group, numbers inside names sort numerically ("Series 2"
   // before "Series 10").
+  const subclassGroup = (s) => (normTag(s) === normTag(ON_HAND) ? -1 : /\bseries\b/i.test(s) ? 0 : /^\d/.test(s) ? 1
+    : normTag(s) === normTag(DUO) ? 1.5 : 2);
   function sortSubclasses(list) {
-    const group = (s) => (normTag(s) === normTag(ON_HAND) ? -1 : /\bseries\b/i.test(s) ? 0 : /^\d/.test(s) ? 1
-      : normTag(s) === normTag(DUO) ? 1.5 : 2);
     return [...list].sort((a, b) =>
-      group(a) - group(b) || a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+      subclassGroup(a) - subclassGroup(b) || a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
   }
+  // Collections (Designs on hand, series, "30th Anniversary", Duo) rather than character names.
+  const isCollectionSubclass = (s) => subclassGroup(s) < 2;
 
   // The design's page id, or null if that page no longer exists.
   function pageOf(design, collections) {
@@ -668,6 +670,6 @@ const Shop = (() => {
 
   return {
     unavailableFor, isPreorder, PREORDER_NOTE, defaultBanner, saleBanner, coverSlides, isCustom, customPrice, addCustomToCart, customArtIds, priceFor, discountFor, sale, renderPrice, readCart, addToCart, setQty, clearCart, stashCart, restoreCart, pruneCart, loadDesigns, loadImage, money, thumbUrl, swatches, designType,
-    loadCatalog, normTag, sortSubclasses, pageOf, currentPage, setPage, ON_HAND, isOnHand, drawPhoto, isDuo, renderDuo, DUO,
+    loadCatalog, normTag, sortSubclasses, isCollectionSubclass, pageOf, currentPage, setPage, ON_HAND, isOnHand, drawPhoto, isDuo, renderDuo, DUO,
   };
 })();

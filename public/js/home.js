@@ -123,6 +123,85 @@
   let pageId = null;
   let subFilter = null; // normalised subclass name, or null for all
 
+  // Searchable list of a page's character subclasses ("Find a Pokémon"): type to narrow it down,
+  // pick one to filter the grid. `names` is [{ name, id, n }].
+  function namePicker(names, page) {
+    const noun = page.id === 'pokemon' ? 'Pokémon' : 'character';
+    const wrap = document.createElement('div');
+    wrap.className = 'name-picker';
+    const input = document.createElement('input');
+    input.type = 'search';
+    input.className = 'name-picker-input';
+    input.placeholder = `Find a ${noun}`;
+    input.autocomplete = 'off';
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-label', `Find a ${noun}`);
+    input.setAttribute('aria-expanded', 'false');
+    const list = document.createElement('ul');
+    list.className = 'name-picker-list';
+    list.id = 'namePickerList';
+    list.setAttribute('role', 'listbox');
+    list.hidden = true;
+    input.setAttribute('aria-controls', list.id);
+    const selected = names.find((x) => x.id === subFilter);
+    if (selected) input.value = selected.name;
+
+    let matches = [];
+    let active = -1;
+    const pick = (x) => {
+      subFilter = x ? x.id : null;
+      show();
+    };
+    const close = () => {
+      list.hidden = true;
+      input.setAttribute('aria-expanded', 'false');
+    };
+    const open = () => {
+      // Everything while the box shows the current choice; otherwise names containing the text.
+      const q = Shop.normTag(input.value);
+      matches = !q || (selected && input.value === selected.name) ? names : names.filter((x) => x.id.includes(q));
+      active = -1;
+      list.replaceChildren(...(matches.length ? matches.map((x, i) => {
+        const li = document.createElement('li');
+        li.setAttribute('role', 'option');
+        li.id = `namePickerOption${i}`;
+        li.setAttribute('aria-selected', String(x.id === subFilter));
+        const n = document.createElement('span');
+        n.className = 'chip-count';
+        n.textContent = x.n;
+        li.append(x.name, n);
+        li.addEventListener('mousedown', (e) => e.preventDefault()); // keep focus until the click
+        li.addEventListener('click', () => pick(x));
+        return li;
+      }) : [Object.assign(document.createElement('li'), { className: 'name-picker-empty', textContent: `No ${noun} found` })]));
+      list.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+    };
+    const highlight = (i) => {
+      active = Math.max(0, Math.min(matches.length - 1, i));
+      [...list.children].forEach((li, j) => li.classList.toggle('active', j === active));
+      input.setAttribute('aria-activedescendant', `namePickerOption${active}`);
+      list.children[active]?.scrollIntoView({ block: 'nearest' });
+    };
+    input.addEventListener('focus', open);
+    input.addEventListener('input', () => {
+      if (!input.value && selected) return pick(null); // cleared: back to all designs
+      open();
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (list.hidden) open(); highlight(active + 1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); highlight(active - 1); }
+      else if (e.key === 'Enter') { e.preventDefault(); const x = matches[active] || (matches.length === 1 && matches[0]); if (x) pick(x); }
+      else if (e.key === 'Escape') { close(); input.blur(); }
+    });
+    input.addEventListener('blur', () => {
+      close();
+      if (selected && input.value !== selected.name) input.value = selected.name;
+    });
+    wrap.append(input, list);
+    return wrap;
+  }
+
   function show() {
     const page = collections.find((c) => c.id === pageId);
     if (!page) {
@@ -138,21 +217,37 @@
     const subs = page.subclasses || [];
     if (subFilter && !subs.some((s) => Shop.normTag(s) === subFilter)) subFilter = null;
 
-    // "Designs on hand" and "Duo" are on every page; only offer them when the page has some.
-    const isTag = (s, tag) => Shop.normTag(s) === Shop.normTag(tag);
-    const sorted = Shop.sortSubclasses(subs).filter((s) => (isTag(s, Shop.ON_HAND) ? onPage.some((c) => Shop.isOnHand(c.design))
-      : isTag(s, Shop.DUO) ? onPage.some((c) => Shop.isDuo(c.design)) : true));
-    const select = document.createElement('select');
-    select.className = 'sub-filter';
-    select.setAttribute('aria-label', 'Filter designs');
-    select.add(new Option('All designs', ''));
-    for (const s of sorted) select.add(new Option(s, Shop.normTag(s), false, Shop.normTag(s) === subFilter));
-    select.addEventListener('change', () => {
-      subFilter = select.value || null;
-      show();
-    });
-    filtersEl.replaceChildren(select);
-    filtersEl.hidden = sorted.length === 0;
+    // Filters: collections (Designs on hand, series, 30th Anniversary, Duo…) as buttons, and
+    // character names (e.g. Pokémon) in a searchable picker. Only subclasses with designs on this
+    // page are offered, each with how many it has.
+    const offered = Shop.sortSubclasses(subs)
+      .map((name) => ({ name, id: Shop.normTag(name), n: onPage.filter((c) => c.subs.has(Shop.normTag(name))).length }))
+      .filter((x) => x.n > 0);
+    if (subFilter && !offered.some((x) => x.id === subFilter)) subFilter = null;
+    const groups = offered.filter((x) => Shop.isCollectionSubclass(x.name));
+    const names = offered.filter((x) => !Shop.isCollectionSubclass(x.name));
+
+    const chip = (label, n, id) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip';
+      b.setAttribute('aria-pressed', String(subFilter === id));
+      const count = document.createElement('span');
+      count.className = 'chip-count';
+      count.textContent = n;
+      b.append(`${label} `, count);
+      b.addEventListener('click', () => {
+        subFilter = id;
+        show();
+      });
+      return b;
+    };
+    const chips = document.createElement('div');
+    chips.className = 'filter-chips';
+    chips.append(chip('All designs', onPage.filter((c) => !Shop.isOnHand(c.design)).length, null), ...groups.map((x) => chip(x.name, x.n, x.id)));
+    filtersEl.replaceChildren(chips);
+    if (names.length) filtersEl.appendChild(namePicker(names, page));
+    filtersEl.hidden = offered.length === 0;
 
     // Designs on hand only show under their own subclass, not in "All designs".
     const shown = subFilter ? onPage.filter((c) => c.subs.has(subFilter)) : onPage.filter((c) => !Shop.isOnHand(c.design));
