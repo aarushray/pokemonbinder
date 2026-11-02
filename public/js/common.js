@@ -564,7 +564,9 @@ const Shop = (() => {
         sl.drawn = true;
       }
       if (!binder || !sl.view || sl.drawn) return;
-      Binder.render(sl.canvas, { ...binder.art, type: binder.type, color: binder.color, view: sl.view });
+      // A duo's backs: turned over, the right-hand binder's back is on the left.
+      if (binder.color2) renderDuo(sl.canvas, { type: binder.type, color: binder.color2, color2: binder.color, view: sl.view });
+      else Binder.render(sl.canvas, { ...binder.art, type: binder.type, color: binder.color, view: sl.view });
       sl.drawn = true;
     }
     function show(i) {
@@ -602,6 +604,12 @@ const Shop = (() => {
         if (binder && binder.type === type && binder.color === color && binder.art.image === image
           && binder.art.fit === art.fit && binder.art.invert === art.invert) return;
         binder = { type, color, art: { image, fit: art.fit, invert: art.invert } };
+        redraw();
+      },
+      // A duo: two binders side by side, in colours color (left) and color2 (right).
+      setDuo(type, color, color2) {
+        if (binder && binder.type === type && binder.color === color && binder.color2 === color2) return;
+        binder = { type, color, color2, art: {} };
         redraw();
       },
       // Shows photos of the real binder's front and back instead of renders.

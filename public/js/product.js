@@ -97,8 +97,12 @@
       leadTime.textContent = pre ? 'Pre-order: a colour you picked is out of stock, so your binders will be completed in 3–4 weeks' : leadText;
     };
 
+    // Front and back slides: the page draws the fronts, the slides draw the backs.
+    const slides = Shop.coverSlides(canvas);
+    slides.setDuo(type.id, picked[0], picked[1]);
     let images = null;
     const draw = () => {
+      slides.setDuo(type.id, picked[0], picked[1]);
       if (images) Shop.renderDuo(canvas, { image: images[0], image2: images[1], color: picked[0], color2: picked[1], type: type.id });
     };
     picked.forEach((c, i) => Shop.swatches(swatches[i], colors, c, (id) => {
