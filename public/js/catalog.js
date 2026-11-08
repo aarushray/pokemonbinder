@@ -47,7 +47,7 @@
         { id: 'velvet', name: 'Velvet texture', colors: VELVET, cards: 540, extraPrice: 5 },
       ],
       shape: { spine: 36, radius: 72, tab: false } },
-    { id: '9-pocket-toploader', name: '9-slots toploader', pockets: 9, capacity: 252, basePrice: 100, ratio: [4, 5], colors: DIAMOND, courierOnly: true,
+    { id: '9-pocket-toploader', name: '9-slots toploader', pockets: 9, capacity: 288, basePrice: 100, ratio: [4, 5], colors: DIAMOND, courierOnly: true,
       shape: { spine: 60, radius: 72, tab: false } },
     { id: '12-pocket', name: '12-slots', pockets: 12, capacity: 480, basePrice: 95, ratio: [4, 5], colors: DIAMOND, courierOnly: true,
       shape: { spine: 75, radius: 60, tab: false } },
